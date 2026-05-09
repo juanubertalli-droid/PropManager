@@ -348,6 +348,7 @@
       
       <div class="nav-group">Soporte y Sistemas</div>
       <div class="nav-item" onclick="window.navigate('canones')">Asistente IPC Oficial</div>
+      <div class="nav-item" onclick="window.navigate('actividad')">📋 Actividad Reciente</div>
       <div class="nav-item" onclick="window.navigate('compartir')" style="color: var(--accent2); font-weight: 700;">Compartir mi Nube</div>
       <div class="nav-item" onclick="window.cerrarSesion()" style="margin-top:auto; opacity:0.6; padding: 2.5rem 2rem;">Finalizar Sesión</div>
     </nav>
@@ -443,8 +444,14 @@
                   <h3>Autorizar Acceso a Socio</h3>
                   <p style="font-size:12px; color:var(--ink3); margin: 1rem 0;">Permite que otro mail registrado pueda ver y editar tu base de datos completa.</p>
                   <div id="my-uid-label" class="mono" style="background:var(--bg); padding:15px; border-radius:12px; font-size:11px; margin-bottom: 1.5rem;">...</div>
-                  <div style="display:flex; gap:10px; margin-top:1rem;">
-                      <input type="email" id="colab-email" class="form-input" placeholder="correo-socio@gmail.com">
+                  <div style="display:flex; gap:10px; margin-top:1rem; flex-wrap:wrap;">
+                      <input type="email" id="colab-email" class="form-input" placeholder="correo-socio@gmail.com" style="flex:1; min-width:200px;">
+                      <select id="colab-rol" class="form-select" style="width:200px;">
+                          <option value="solo_ver">Solo ver</option>
+                          <option value="cobrador">Cobrador</option>
+                          <option value="administrativo">Administrativo</option>
+                          <option value="admin_total">Administrador total</option>
+                      </select>
                       <button class="btn btn-primary" onclick="window.agregarColaborador()">Dar Acceso</button>
                   </div>
                   <div id="colab-list" style="margin-top:2.5rem;"></div>
@@ -477,6 +484,25 @@
       <div id="section-alertas" class="section">
           <div class="section-header"><h1>Centro Maestre de Alertas</h1></div>
           <div id="alerts-list-full" class="alert-list"></div>
+      </div>
+
+      <div id="section-actividad" class="section">
+          <div class="section-header"><h1>Actividad Reciente</h1></div>
+          <div class="card">
+              <div class="card-header" style="justify-content:space-between;">
+                  <span style="font-weight:800;">Historial de acciones del equipo</span>
+                  <select id="filtro-actividad" class="form-select" style="width:200px;" onchange="window.renderActividad()">
+                      <option value="">Todas las acciones</option>
+                      <option value="cobro">Solo cobros</option>
+                      <option value="anulacion">Solo anulaciones</option>
+                      <option value="contrato">Solo contratos</option>
+                      <option value="propiedad">Solo propiedades</option>
+                      <option value="persona">Solo personas</option>
+                      <option value="ajuste">Solo ajustes de canon</option>
+                  </select>
+              </div>
+              <div id="actividad-list" class="table-wrap"></div>
+          </div>
       </div>
 
     </div>
@@ -761,6 +787,7 @@
   function pagoQueCubreMes(cId, mes) {
       return (db.pagos || []).find(pg => {
           if(pg.cId !== cId) return false;
+          if(pg.anulado) return false;
           // Pago con rango
           if(pg.periodoDesde && pg.periodoHasta) return mes >= pg.periodoDesde && mes <= pg.periodoHasta;
           // Pago legacy (solo periodo simple)
@@ -851,7 +878,7 @@
                 <td>${inq?.nombre || '-'}</td>
                 <td>${pg.periodoDesde && pg.periodoHasta && pg.periodoDesde !== pg.periodoHasta ? pg.periodoDesde + ' → ' + pg.periodoHasta : (pg.periodo || '-')}</td>
                 <td class='mono'>$ ${(pg.monto || 0).toLocaleString('es-AR')}</td>
-                <td><button class='btn btn-sm' onclick="window.verRecibo('${pg.id}')">📄 Recibo</button></td>
+                <td style="display:flex; gap:6px;">${pg.anulado ? '<span class="badge badge-danger">ANULADO</span>' : `<button class='btn btn-sm' onclick="window.verRecibo('${pg.id}')">📄 Recibo</button><button class='btn btn-sm btn-danger' onclick="window.anularCobro('${pg.id}')">Anular</button>`}</td>
             </tr>`;
         }).join('') + "</tbody></table>";
     }
@@ -908,15 +935,25 @@
       renderPagos(); 
       updateAlerts(); 
       renderColaboradores();
+      window.renderActividad();
   }
+
+  const ROL_LABELS = { solo_ver: 'Solo ver', cobrador: 'Cobrador', administrativo: 'Administrativo', admin_total: 'Admin Total' };
 
   function renderColaboradores() {
       const colabList = document.getElementById('colab-list');
       if(!colabList) return;
-      colabList.innerHTML = (db.colaboradores || []).map(email => `
-          <div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid var(--border);">
-              <span class="mono">${email}</span>
-              <button class="btn btn-sm btn-danger" onclick="window.quitarColab('${email}')">Revocar</button>
+      const colabs = db.colaboradores_v2 || [];
+      if(!colabs.length) { colabList.innerHTML = '<p style="font-size:12px; color:var(--ink3); padding:10px;">No hay colaboradores aún.</p>'; return; }
+      colabList.innerHTML = colabs.map(c => `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:8px;">
+              <span class="mono" style="font-size:12px;">${c.email}</span>
+              <div style="display:flex; gap:8px; align-items:center;">
+                  <select class="form-select" style="padding:6px 10px; height:36px; font-size:12px;" onchange="window.cambiarRolColab('${c.email}', this.value)">
+                      ${['solo_ver','cobrador','administrativo','admin_total'].map(r => `<option value="${r}" ${c.rol === r ? 'selected' : ''}>${ROL_LABELS[r]}</option>`).join('')}
+                  </select>
+                  <button class="btn btn-sm btn-danger" onclick="window.quitarColab('${c.email}')">Revocar</button>
+              </div>
           </div>
       `).join('');
   }
@@ -997,6 +1034,7 @@
           const idx = db.personas.findIndex(x => x.id === p.id); 
           if(idx > -1) db.personas[idx] = p; else db.personas.push(p);
           
+          logActividad('persona', `Persona ${perId ? 'editada' : 'creada'}: ${p.nombre}`);
           await safeSetDoc(db); 
           closeModal('modal-persona'); 
           showToast("Sincronización de persona exitosa.");
@@ -1027,6 +1065,7 @@
           const idx = db.propiedades.findIndex(x => x.id === p.id); 
           if(idx > -1) db.propiedades[idx] = p; else db.propiedades.push(p);
           
+          logActividad('propiedad', `Inmueble ${p.id ? 'editado' : 'creado'}: ${p.nombre}`);
           await safeSetDoc(db); 
           closeModal('modal-prop'); 
           showToast("Inmueble guardado correctamente.");
@@ -1076,6 +1115,7 @@
           if(!db.contratos) db.contratos = []; 
           db.contratos.push(c);
           
+          logActividad('contrato', `Contrato creado para propiedad ${c.pId}`);
           await safeSetDoc(db); 
           closeModal('modal-contrato'); 
           showToast("Vínculo contractual activo.");
@@ -1106,6 +1146,8 @@
               if(ci > -1) db.contratos[ci].selladoPagado = true; 
           }
           
+          const propCobro = db.contratos.find(x=>x.id===cId); const propNomCobro = propCobro ? (db.propiedades.find(x=>x.id===propCobro.pId)?.nombre||'S/N') : 'S/N';
+          logActividad('cobro', `Cobro registrado en ${propNomCobro}: $${monto.toLocaleString('es-AR')} — Período: ${pg.periodo}`);
           await safeSetDoc(db); 
           closeModal('modal-pago'); 
           showToast("Cobro registrado y comprobante emitido.");
@@ -1150,17 +1192,42 @@
   }
   
   window.agregarColaborador = async () => { 
-      const email = document.getElementById('colab-email').value.trim().toLowerCase(); 
+      const email = document.getElementById('colab-email').value.trim().toLowerCase();
+      const rol = document.getElementById('colab-rol').value;
       if(!email) return showToast("Ingresa un email válido.");
-      await userDocRef.update({ colaboradores: firebase.firestore.FieldValue.arrayUnion(email) }); 
-      document.getElementById('colab-email').value = ''; 
-      showToast("Socio autorizado. Podrá ver tus datos al ingresar."); 
+      if(!db.colaboradores_v2) db.colaboradores_v2 = [];
+      const existe = db.colaboradores_v2.find(c => c.email === email);
+      if(existe) return showToast("Este colaborador ya tiene acceso.");
+      db.colaboradores_v2.push({ email, rol });
+      // mantener colaboradores legacy para compatibilidad con reglas Firestore
+      if(!db.colaboradores) db.colaboradores = [];
+      if(!db.colaboradores.includes(email)) db.colaboradores.push(email);
+      await safeSetDoc(db);
+      document.getElementById('colab-email').value = '';
+      logActividad('colaborador', `Colaborador agregado: ${email} (${ROL_LABELS[rol]})`);
+      showToast("✅ Socio autorizado como " + ROL_LABELS[rol]);
+      renderColaboradores();
   };
   
   window.quitarColab = async (email) => { 
-      if(!confirm("¿Deseas quitar el acceso a este socio?")) return; 
-      await userDocRef.update({ colaboradores: firebase.firestore.FieldValue.arrayRemove(email) }); 
-      showToast("Acceso revocado."); 
+      if(!confirm("¿Deseas quitar el acceso a este socio?")) return;
+      db.colaboradores_v2 = (db.colaboradores_v2 || []).filter(c => c.email !== email);
+      db.colaboradores = (db.colaboradores || []).filter(e => e !== email);
+      await safeSetDoc(db);
+      logActividad('colaborador', `Acceso revocado a: ${email}`);
+      showToast("Acceso revocado.");
+      renderColaboradores();
+  };
+
+  window.cambiarRolColab = async (email, nuevoRol) => {
+      if(!db.colaboradores_v2) return;
+      const idx = db.colaboradores_v2.findIndex(c => c.email === email);
+      if(idx > -1) {
+          db.colaboradores_v2[idx].rol = nuevoRol;
+          await safeSetDoc(db);
+          logActividad('colaborador', `Rol de ${email} cambiado a ${ROL_LABELS[nuevoRol]}`);
+          showToast("Rol actualizado.");
+      }
   };
   
   window.switchNube = (uid) => { loadWorkspace(uid); window.navigate('dashboard'); showToast("Cambiando de oficina virtual..."); };
@@ -1409,6 +1476,72 @@
       input.click();
   };
 
+
+  // ── ACTIVIDAD RECIENTE ──────────────────────────────────────
+  function logActividad(tipo, descripcion, extra) {
+      if(!db.actividad) db.actividad = [];
+      db.actividad.unshift({
+          id: 'ACT-' + Date.now(),
+          tipo,
+          descripcion,
+          usuario: currentUser?.email || 'desconocido',
+          fecha: new Date().toISOString(),
+          extra: extra || null
+      });
+      // Mantener solo los últimos 200 registros
+      if(db.actividad.length > 200) db.actividad = db.actividad.slice(0, 200);
+  }
+
+  window.renderActividad = () => {
+      const cont = document.getElementById('actividad-list');
+      if(!cont) return;
+      const filtro = document.getElementById('filtro-actividad')?.value || '';
+      const lista = (db.actividad || []).filter(a => !filtro || a.tipo === filtro);
+      if(!lista.length) {
+          cont.innerHTML = '<p style="padding:2rem; color:var(--ink3); text-align:center;">No hay actividad registrada aún.</p>';
+          return;
+      }
+      const iconos = { cobro:'💰', anulacion:'❌', contrato:'📄', propiedad:'🏠', persona:'👤', ajuste:'📈', colaborador:'👥' };
+      cont.innerHTML = '<table><thead><tr><th>Fecha y Hora</th><th>Tipo</th><th>Descripción</th><th>Usuario</th></tr></thead><tbody>' +
+          lista.map(a => {
+              const fecha = new Date(a.fecha).toLocaleString('es-AR');
+              const icono = iconos[a.tipo] || '📌';
+              return `<tr>
+                  <td class="mono" style="font-size:12px;">${fecha}</td>
+                  <td><span class="badge" style="background:var(--bg);">${icono} ${a.tipo}</span></td>
+                  <td style="font-size:13px;">${a.descripcion}</td>
+                  <td class="mono" style="font-size:11px; color:var(--ink3);">${a.usuario}</td>
+              </tr>`;
+          }).join('') + '</tbody></table>';
+  };
+
+  // ── ANULAR COBRO ────────────────────────────────────────────
+  window.anularCobro = async (id) => {
+      const motivo = prompt("¿Motivo de la anulación? (requerido)");
+      if(motivo === null) return; // canceló
+      if(!motivo.trim()) return showToast("Debés ingresar un motivo para anular.");
+      try {
+          showLoading(true);
+          const idx = db.pagos.findIndex(x => x.id === id);
+          if(idx === -1) return showToast("Cobro no encontrado.");
+          const pg = db.pagos[idx];
+          db.pagos[idx].anulado = true;
+          db.pagos[idx].anuladoPor = currentUser?.email || 'desconocido';
+          db.pagos[idx].anuladoMotivo = motivo.trim();
+          db.pagos[idx].anuladoFecha = new Date().toISOString();
+          const c = db.contratos.find(x => x.id === pg.cId);
+          const prop = c ? db.propiedades.find(x => x.id === c.pId) : null;
+          logActividad('anulacion', `Cobro ${id} anulado en ${prop?.nombre || 'S/N'} — Motivo: ${motivo.trim()}`);
+          await safeSetDoc(db);
+          showToast("✅ Cobro anulado correctamente.");
+          renderAll();
+      } catch(e) {
+          showError('anular cobro', e);
+      } finally {
+          showLoading(false);
+      }
+  };
+
   window.cerrarSesion = () => auth.signOut();
   
   function updateAlerts() {
@@ -1533,6 +1666,7 @@
           db.contratos[idx].act = proxFecha;
           await safeSetDoc(db);
           closeModal('modal-ajuste');
+          logActividad('ajuste', `Canon ajustado a $${nuevoCanon.toLocaleString('es-AR')} — próximo ajuste: ${proxFecha}`);
           showToast("✅ Canon actualizado a $" + nuevoCanon.toLocaleString('es-AR') + ". Próximo ajuste: " + proxFecha);
           renderAll();
       } catch(e) {
