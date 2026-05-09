@@ -825,29 +825,39 @@
 
             // Calcular deuda acumulada desde inicio del contrato
             let deudaStr = '-';
-            if(!alDia && c.inicio) {
-                const inicioDate = new Date(c.inicio + '-01');
+            if(c.inicio) {
+                const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                const inicioDate = new Date(c.inicio);
                 const hoyDate = new Date();
-                // Generar lista de meses desde inicio hasta hoy
-                let mesesDeuda = 0;
-                let cur = new Date(inicioDate);
-                while(cur <= hoyDate) {
+                // Recorrer mes a mes desde inicio hasta hoy
+                const mesesImpagos = [];
+                let cur = new Date(inicioDate.getFullYear(), inicioDate.getMonth(), 1);
+                const fin = new Date(hoyDate.getFullYear(), hoyDate.getMonth(), 1);
+                while(cur <= fin) {
                     const mesStr = cur.toISOString().substring(0,7);
                     const cubierto = pagoQueCubreMes(c.id, mesStr);
-                    if(!cubierto) mesesDeuda++;
+                    if(!cubierto) {
+                        mesesImpagos.push(MESES_ES[cur.getMonth()] + ' ' + cur.getFullYear());
+                    }
                     cur.setMonth(cur.getMonth() + 1);
                 }
-                // Restar saldos históricos (pagos masivos)
+                // Restar saldos históricos (pagos masivos en pesos)
                 const saldoHistorico = (db.pagos || [])
-                    .filter(pg => pg.cId === c.id && pg.periodo === 'HISTÓRICO')
+                    .filter(pg => pg.cId === c.id && pg.periodo === 'HISTÓRICO' && !pg.anulado)
                     .reduce((acc, pg) => acc + (pg.monto || 0), 0);
-                const deudaBruta = mesesDeuda * canonMensual;
+                const mesesCount = mesesImpagos.length;
+                const deudaBruta = mesesCount * canonMensual;
                 const deudaFinal = Math.max(0, deudaBruta - saldoHistorico);
-                deudaStr = deudaFinal > 0 
-                    ? `<span style="color:var(--red); font-weight:800;">$ ${deudaFinal.toLocaleString('es-AR')}</span><br><small style="color:var(--ink3);">${mesesDeuda} mes${mesesDeuda !== 1 ? 'es' : ''} impago${mesesDeuda !== 1 ? 's' : ''}</small>`
-                    : `<span style="color:var(--green); font-weight:700;">Sin deuda</span>`;
+                if(deudaFinal > 0) {
+                    const listaMeses = mesesImpagos.slice(0,6).join(', ') + (mesesImpagos.length > 6 ? '...' : '');
+                    deudaStr = `<span style="color:var(--red); font-weight:800;">$ ${deudaFinal.toLocaleString('es-AR')}</span><br><small style="color:var(--red); font-size:11px;">${mesesCount} mes${mesesCount !== 1 ? 'es' : ''}: ${listaMeses}</small>`;
+                } else {
+                    deudaStr = '<span style="color:var(--green); font-weight:700;">✅ Sin deuda</span>';
+                }
             } else if(alDia) {
-                deudaStr = '<span style="color:var(--green); font-weight:700;">Sin deuda</span>';
+                deudaStr = '<span style="color:var(--green); font-weight:700;">✅ Sin deuda</span>';
+            } else {
+                deudaStr = '<span style="color:var(--ink3); font-size:12px;">Sin fecha de inicio</span>';
             }
 
             return `<tr style="${rowStyle}">
@@ -1569,8 +1579,39 @@
               }
           }
           // Alerta sellado
-          if(c.selladoVenc && c.selladoVenc <= hoy && !c.selladoPagado) alertas.push({prop: nombreProp, msg: "❗ FALTA PAGO DE SELLADO DE LEY (vencía: " + c.selladoVenc + ").", tipo: "danger"});
+          if(c.selladoVenc && !c.selladoPagado) {
+              if(c.selladoVenc <= hoy) alertas.push({prop: nombreProp, msg: "❗ FALTA PAGO DE SELLADO DE LEY (vencía: " + c.selladoVenc + ").", tipo: "danger"});
+              else if(c.selladoVenc <= hoy15) alertas.push({prop: nombreProp, msg: "⚠️ Sellado de ley vence en menos de 15 días (fecha: " + c.selladoVenc + ").", tipo: "danger"});
+          }
       });
+      // Alertas de deuda por cobros pendientes
+      (db.contratos || []).forEach(c => {
+          if(!c.inicio) return;
+          const nombreProp = db.propiedades.find(x => x.id === c.pId)?.nombre || 'Propiedad';
+          const canonMensual = (Number(c.canon) || 0) + (Number(c.mutuo) || 0);
+          const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+          const inicioDate = new Date(c.inicio);
+          const hoyDate = new Date();
+          const mesesImpagos = [];
+          let cur = new Date(inicioDate.getFullYear(), inicioDate.getMonth(), 1);
+          const fin = new Date(hoyDate.getFullYear(), hoyDate.getMonth(), 1);
+          while(cur <= fin) {
+              const mesStr = cur.toISOString().substring(0,7);
+              const cubierto = (db.pagos || []).find(pg => {
+                  if(pg.cId !== c.id || pg.anulado) return false;
+                  if(pg.periodoDesde && pg.periodoHasta) return mesStr >= pg.periodoDesde && mesStr <= pg.periodoHasta;
+                  return pg.periodo === mesStr;
+              });
+              if(!cubierto) mesesImpagos.push(MESES_ES[cur.getMonth()] + ' ' + cur.getFullYear());
+              cur.setMonth(cur.getMonth() + 1);
+          }
+          const saldoHistorico = (db.pagos || []).filter(pg => pg.cId === c.id && pg.periodo === 'HISTÓRICO' && !pg.anulado).reduce((acc, pg) => acc + (pg.monto || 0), 0);
+          const deudaFinal = Math.max(0, mesesImpagos.length * canonMensual - saldoHistorico);
+          if(deudaFinal > 0) {
+              alertas.push({prop: nombreProp, msg: `💸 Deuda pendiente: $${deudaFinal.toLocaleString('es-AR')} (${mesesImpagos.length} mes${mesesImpagos.length!==1?'es':''}: ${mesesImpagos.slice(0,3).join(', ')}${mesesImpagos.length>3?'...':''})`, tipo: "danger"});
+          }
+      });
+
       safeSetText('dash-alerts', alertas.length); 
       safeSetText('badge-alertas', alertas.length);
       const alertsEl = document.getElementById('alerts-list-full');
