@@ -551,6 +551,7 @@
                 <div class="form-group"><label class="form-label">Moneda de Pago</label><select id="c-moneda" class="form-select"><option>ARS</option><option>USD</option></select></div>
                 <div class="form-group"><label class="form-label">Periodicidad de Ajuste</label><select id="c-periodo" class="form-select"><option value="3">Trimestral</option><option value="4">Cuatrimestral</option><option value="6">Semestral</option><option value="12">Anual</option></select></div>
                 <div class="form-group"><label class="form-label">Día de Cobro Pactado</label><input type="number" id="c-dia" class="form-input" value="10"></div>
+                <div class="form-group"><label class="form-label">Fecha de Inicio del Contrato</label><input type="date" id="c-inicio" class="form-input"></div>
                 <div class="form-group"><label class="form-label">Vencimiento del Contrato</label><input type="date" id="c-venc" class="form-input"></div>
                 <div class="form-group"><label class="form-label">Próximo Aumento Programado</label><input type="date" id="c-act" class="form-input"></div>
                 
@@ -570,7 +571,8 @@
         <div class="modal-body">
             <div class="form-grid">
                 <div class="form-group form-full"><label class="form-label">Vínculo Maestro</label><select id="p-c-id" class="form-select" onchange="window.actualizarMontoSugerido()"></select></div>
-                <div class="form-group"><label class="form-label">Mes que se abona</label><input type="month" id="p-periodo" class="form-input"></div>
+                <div class="form-group"><label class="form-label">Mes inicio del período</label><input type="month" id="p-periodo-desde" class="form-input"></div>
+                <div class="form-group"><label class="form-label">Mes fin del período</label><input type="month" id="p-periodo-hasta" class="form-input"></div>
                 <div class="form-group"><label class="form-label">Monto Impactado ($)</label><input type="number" id="p-monto" class="form-input"></div>
                 <div class="form-group form-full"><label style="font-size:13px; font-weight:700; color:var(--accent);"><input type="checkbox" id="p-paga-sellado"> ¿Incluye el pago del sellado de ley?</label></div>
                 <div class="form-group form-full"><label class="form-label">Notas del Recibo</label><input type="text" id="p-notas" class="form-input" placeholder="Ej: Pago parcial, transferencia banco X..."></div>
@@ -755,6 +757,17 @@
   };
 
   // --- RENDERS DE TABLAS COMPLETOS ---
+  // Helper: dado un contrato, devuelve el pago que cubre el mes actual (soporta rangos)
+  function pagoQueCubreMes(cId, mes) {
+      return (db.pagos || []).find(pg => {
+          if(pg.cId !== cId) return false;
+          // Pago con rango
+          if(pg.periodoDesde && pg.periodoHasta) return mes >= pg.periodoDesde && mes <= pg.periodoHasta;
+          // Pago legacy (solo periodo simple)
+          return pg.periodo === mes;
+      });
+  }
+
   function renderPagos() {
     const cont = document.getElementById('pagos-list');
     if(!cont) return;
@@ -766,19 +779,57 @@
             return; 
         }
         
-        cont.innerHTML = "<table><thead><tr><th>Propiedad Vinculada</th><th>Inquilino Maestro</th><th>Canon Bruto</th><th>Estado Mes</th><th>Gestión</th></tr></thead><tbody>" + 
+        cont.innerHTML = "<table><thead><tr><th>Propiedad Vinculada</th><th>Inquilino</th><th>Canon Mensual</th><th>Estado</th><th>Deuda Acumulada</th><th>Período Cubierto</th><th>Gestión</th></tr></thead><tbody>" + 
         (db.contratos || []).map(c => {
             const p = (db.propiedades || []).find(x => x.id === c.pId);
             const inq = (db.personas || []).find(x => x.id === c.inqId);
-            const pago = (db.pagos || []).find(pg => pg.cId === c.id && pg.periodo === mesActual);
-            // FIX: || 0 para evitar NaN si canon o mutuo no están definidos
-            const totalE = (Number(c.canon) || 0) + (Number(c.mutuo) || 0);
-            
-            return `<tr>
+            const pago = pagoQueCubreMes(c.id, mesActual);
+            const canonMensual = (Number(c.canon) || 0) + (Number(c.mutuo) || 0);
+            const alDia = !!pago;
+            const rowStyle = alDia ? "background:#F0FDF4;" : "background:#FFF5F5;";
+            const estadoBadge = alDia 
+                ? "<span class='badge badge-success'>✅ Al día</span>" 
+                : "<span class='badge badge-danger'>🔴 Pendiente</span>";
+            const periodoCubierto = pago 
+                ? (pago.periodoDesde && pago.periodoHasta && pago.periodoDesde !== pago.periodoHasta 
+                    ? pago.periodoDesde + ' → ' + pago.periodoHasta 
+                    : (pago.periodoDesde || pago.periodo || '-'))
+                : '-';
+
+            // Calcular deuda acumulada desde inicio del contrato
+            let deudaStr = '-';
+            if(!alDia && c.inicio) {
+                const inicioDate = new Date(c.inicio + '-01');
+                const hoyDate = new Date();
+                // Generar lista de meses desde inicio hasta hoy
+                let mesesDeuda = 0;
+                let cur = new Date(inicioDate);
+                while(cur <= hoyDate) {
+                    const mesStr = cur.toISOString().substring(0,7);
+                    const cubierto = pagoQueCubreMes(c.id, mesStr);
+                    if(!cubierto) mesesDeuda++;
+                    cur.setMonth(cur.getMonth() + 1);
+                }
+                // Restar saldos históricos (pagos masivos)
+                const saldoHistorico = (db.pagos || [])
+                    .filter(pg => pg.cId === c.id && pg.periodo === 'HISTÓRICO')
+                    .reduce((acc, pg) => acc + (pg.monto || 0), 0);
+                const deudaBruta = mesesDeuda * canonMensual;
+                const deudaFinal = Math.max(0, deudaBruta - saldoHistorico);
+                deudaStr = deudaFinal > 0 
+                    ? `<span style="color:var(--red); font-weight:800;">$ ${deudaFinal.toLocaleString('es-AR')}</span><br><small style="color:var(--ink3);">${mesesDeuda} mes${mesesDeuda !== 1 ? 'es' : ''} impago${mesesDeuda !== 1 ? 's' : ''}</small>`
+                    : `<span style="color:var(--green); font-weight:700;">Sin deuda</span>`;
+            } else if(alDia) {
+                deudaStr = '<span style="color:var(--green); font-weight:700;">Sin deuda</span>';
+            }
+
+            return `<tr style="${rowStyle}">
                 <td><b>${p?.nombre || 'Propiedad S/N'}</b></td>
                 <td>${inq?.nombre || 'Inquilino S/N'}</td>
-                <td class='mono'>$ ${totalE.toLocaleString()}</td>
-                <td>${pago ? "<span class='badge badge-success'>Cobrado</span>" : "<span class='badge badge-danger'>Pendiente</span>"}</td>
+                <td class='mono'>$ ${canonMensual.toLocaleString('es-AR')}</td>
+                <td>${estadoBadge}</td>
+                <td>${deudaStr}</td>
+                <td class='mono' style="font-size:12px;">${periodoCubierto}</td>
                 <td>${pago ? `<button class='btn btn-sm' onclick="window.verRecibo('${pago.id}')">📄 Recibo</button>` : `<button class='btn btn-sm btn-accent' onclick="window.abrirModalPago('${c.id}')">Cobrar</button>`}</td>
             </tr>`;
         }).join('') + "</tbody></table>";
@@ -798,7 +849,7 @@
                 <td>${pg.fecha || '-'}</td>
                 <td>${p?.nombre || 'S/N'}</td>
                 <td>${inq?.nombre || '-'}</td>
-                <td>${pg.periodo || '-'}</td>
+                <td>${pg.periodoDesde && pg.periodoHasta && pg.periodoDesde !== pg.periodoHasta ? pg.periodoDesde + ' → ' + pg.periodoHasta : (pg.periodo || '-')}</td>
                 <td class='mono'>$ ${(pg.monto || 0).toLocaleString('es-AR')}</td>
                 <td><button class='btn btn-sm' onclick="window.verRecibo('${pg.id}')">📄 Recibo</button></td>
             </tr>`;
@@ -907,7 +958,14 @@
       if(c) document.getElementById('p-monto').value = (Number(c.canon) || 0) + (Number(c.mutuo) || 0); 
   };
   
-  window.abrirModalPago = (cId) => { window.openModal('modal-pago'); document.getElementById('p-c-id').value = cId; window.actualizarMontoSugerido(); };
+  window.abrirModalPago = (cId) => {
+      window.openModal('modal-pago');
+      document.getElementById('p-c-id').value = cId;
+      window.actualizarMontoSugerido();
+      const mesActual = new Date().toISOString().substring(0,7);
+      document.getElementById('p-periodo-desde').value = mesActual;
+      document.getElementById('p-periodo-hasta').value = mesActual;
+  };
 
   // --- FIREBASE SYNC (GUARDADO INTEGRAL) ---
   document.getElementById('btn-save-persona-action').onclick = async () => {
@@ -1006,6 +1064,7 @@
               iva: document.getElementById('c-iva').value, 
               periodo: document.getElementById('c-periodo').value, 
               dia: Number(document.getElementById('c-dia').value), 
+              inicio: document.getElementById('c-inicio').value,
               venc: document.getElementById('c-venc').value, 
               act: document.getElementById('c-act').value, 
               moneda: document.getElementById('c-moneda').value, 
@@ -1033,7 +1092,11 @@
           showLoading(true);
           const cId = document.getElementById('p-c-id').value; 
           const monto = Number(document.getElementById('p-monto').value);
-          const pg = { id: "REC-"+Date.now(), cId, monto, periodo: document.getElementById('p-periodo').value, fecha: new Date().toISOString().split('T')[0], notas: document.getElementById('p-notas').value };
+          const periodoDesde = document.getElementById('p-periodo-desde').value;
+          const periodoHasta = document.getElementById('p-periodo-hasta').value || periodoDesde;
+          if(!periodoDesde) { showLoading(false); return showToast("Seleccioná el mes de inicio del período."); }
+          const periodoLabel = periodoDesde === periodoHasta ? periodoDesde : periodoDesde + ' → ' + periodoHasta;
+          const pg = { id: "REC-"+Date.now(), cId, monto, periodo: periodoLabel, periodoDesde, periodoHasta, fecha: new Date().toISOString().split('T')[0], notas: document.getElementById('p-notas').value };
           
           if(!db.pagos) db.pagos = []; 
           db.pagos.push(pg); 
@@ -1217,7 +1280,7 @@
       document.getElementById('c-id').value = '';
       poblarSelectsContrato();
       // Limpiar campos
-      ['c-canon','c-mutuo','c-sellado','c-sellado-venc','c-dia','c-venc','c-act'].forEach(id => {
+      ['c-canon','c-mutuo','c-sellado','c-sellado-venc','c-dia','c-inicio','c-venc','c-act'].forEach(id => {
           const el = document.getElementById(id); if(el) el.value = '';
       });
       document.getElementById('c-mutuo').value = 0;
@@ -1248,6 +1311,7 @@
       document.getElementById('c-moneda').value = c.moneda || 'ARS';
       document.getElementById('c-periodo').value = c.periodo || '3';
       document.getElementById('c-dia').value = c.dia || 10;
+      document.getElementById('c-inicio').value = c.inicio || '';
       document.getElementById('c-venc').value = c.venc || '';
       document.getElementById('c-act').value = c.act || '';
       document.querySelector('#modal-contrato .modal-title').textContent = 'Editar Vínculo Contractual';
@@ -1300,7 +1364,7 @@
         <p><b>Fecha:</b> ${pg.fecha}</p>
         <p><b>Inmueble:</b> ${p?.nombre || '-'}</p>
         <p><b>Recibimos de:</b> ${inq?.nombre || '-'}</p>
-        <p><b>Período:</b> ${pg.periodo}</p>
+        <p><b>Período:</b> ${pg.periodoDesde && pg.periodoHasta && pg.periodoDesde !== pg.periodoHasta ? pg.periodoDesde + ' al ' + pg.periodoHasta : (pg.periodo || '-')}</p>
         <div style="margin-top:2.5rem; padding:1.5rem; border:2px solid var(--ink); text-align:right; font-size:24px; font-weight:800; border-radius:12px;">
             TOTAL: $ ${montoStr}
         </div>
