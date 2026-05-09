@@ -1047,7 +1047,7 @@
               container.innerHTML = snap.docs.map(d => `<button class='btn btn-sm' style='width:100%; margin-bottom:10px; justify-content:flex-start;' onclick="window.switchNube('${d.id}')">☁️ Nube de ${d.data().perfil?.nombre || 'Socio'}</button>`).join('');
               container.innerHTML += `<button class='btn btn-sm btn-accent' style='width:100%; margin-top:10px;' onclick="window.switchNube('${currentUser.uid}')">Mi Nube Principal</button>`;
           }
-      } catch(e) { console.error("Error Collab:", e); }
+      } catch(e) { if(e?.code !== 'permission-denied') console.error("Error Collab:", e); }
   }
   
   window.agregarColaborador = async () => { 
@@ -1160,6 +1160,11 @@
               }
           }
       }, (error) => {
+          // permission-denied al inicio es normal (usuario aún no autenticado)
+          if (error.code === 'permission-denied') {
+              console.warn("Firestore: permiso denegado (normal antes de autenticar).");
+              return;
+          }
           console.error("onSnapshot error:", error);
           showToast("❌ Error Firestore: " + (error.code || error.message) + " — Revisá las Reglas en la consola de Firebase.");
       });
