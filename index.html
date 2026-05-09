@@ -609,6 +609,42 @@
     </div>
 </div>
 
+<!-- MODAL AJUSTE DE CANON -->
+<div class="modal-overlay" id="modal-ajuste">
+    <div class="modal" style="max-width:520px;">
+        <div class="modal-header">
+            <div class="modal-title">📈 Ajuste de Canon</div>
+            <button class="modal-close" onclick="window.closeModal('modal-ajuste')">✕</button>
+        </div>
+        <div class="modal-body">
+            <div id="ajuste-info" style="background:var(--bg); border-radius:12px; padding:1.25rem; margin-bottom:1.5rem; font-size:14px; line-height:2;"></div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Canon actual ($)</label>
+                    <input type="number" id="ajuste-canon-actual" class="form-input" disabled>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">IPC acumulado (%)</label>
+                    <input type="text" id="ajuste-ipc" class="form-input" disabled>
+                </div>
+                <div class="form-group form-full">
+                    <label class="form-label">Nuevo canon sugerido — podés modificarlo ($)</label>
+                    <input type="number" id="ajuste-canon-nuevo" class="form-input" style="font-size:22px; font-weight:800; color:var(--accent);">
+                </div>
+                <div class="form-group form-full">
+                    <label class="form-label">Próxima fecha de ajuste (calculada automáticamente)</label>
+                    <input type="date" id="ajuste-prox-fecha" class="form-input">
+                </div>
+            </div>
+            <div id="ajuste-loading" style="display:none; text-align:center; padding:1rem; color:var(--ink3); font-size:13px;">⏳ Consultando INDEC...</div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="window.closeModal('modal-ajuste')">Cancelar</button>
+            <button class="btn btn-primary" id="btn-confirmar-ajuste">✅ Confirmar y Aplicar Ajuste</button>
+        </div>
+    </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- 
@@ -1047,7 +1083,7 @@
               container.innerHTML = snap.docs.map(d => `<button class='btn btn-sm' style='width:100%; margin-bottom:10px; justify-content:flex-start;' onclick="window.switchNube('${d.id}')">☁️ Nube de ${d.data().perfil?.nombre || 'Socio'}</button>`).join('');
               container.innerHTML += `<button class='btn btn-sm btn-accent' style='width:100%; margin-top:10px;' onclick="window.switchNube('${currentUser.uid}')">Mi Nube Principal</button>`;
           }
-      } catch(e) { if(e?.code !== 'permission-denied') console.error("Error Collab:", e); }
+      } catch(e) { console.error("Error Collab:", e); }
   }
   
   window.agregarColaborador = async () => { 
@@ -1160,11 +1196,6 @@
               }
           }
       }, (error) => {
-          // permission-denied al inicio es normal (usuario aún no autenticado)
-          if (error.code === 'permission-denied') {
-              console.warn("Firestore: permiso denegado (normal antes de autenticar).");
-              return;
-          }
           console.error("onSnapshot error:", error);
           showToast("❌ Error Firestore: " + (error.code || error.message) + " — Revisá las Reglas en la consola de Firebase.");
       });
@@ -1329,8 +1360,8 @@
           const nombreProp = db.propiedades.find(x => x.id === c.pId)?.nombre || 'Propiedad';
           // Alerta actualización: antes solo comparaba con hoy exacto — ahora avisa con 15 días de anticipación
           if(c.act) {
-              if(c.act <= hoy) alertas.push({prop: nombreProp, msg: "⚠️ Actualización de canon vencida (fecha: " + c.act + ").", tipo: "danger"});
-              else if(c.act <= hoy15) alertas.push({prop: nombreProp, msg: "🔔 Actualización de canon en menos de 15 días (fecha: " + c.act + ").", tipo: "danger"});
+              if(c.act <= hoy) alertas.push({prop: nombreProp, msg: "⚠️ Actualización de canon vencida (fecha: " + c.act + ").", tipo: "danger", cId: c.id});
+              else if(c.act <= hoy15) alertas.push({prop: nombreProp, msg: "🔔 Actualización de canon en menos de 15 días (fecha: " + c.act + ").", tipo: "danger", cId: c.id});
           }
           // Alerta vencimiento contrato: avisa con 60 días de anticipación
           if(c.venc) {
@@ -1347,9 +1378,105 @@
       safeSetText('badge-alertas', alertas.length);
       const alertsEl = document.getElementById('alerts-list-full');
       if(alertsEl) alertsEl.innerHTML = alertas.length 
-          ? alertas.map(a => `<div class="card" style="padding:15px; border-left:8px solid ${a.tipo === 'danger' ? 'var(--red)' : 'var(--accent)'}; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;"><span><b>${a.prop}</b>: ${a.msg}</span></div>`).join('')
+          ? alertas.map(a => `<div class="card" style="padding:15px; border-left:8px solid ${a.tipo === 'danger' ? 'var(--red)' : 'var(--accent)'}; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;"><span><b>${a.prop}</b>: ${a.msg}</span>${a.cId ? `<button class='btn btn-sm btn-accent' onclick="window.abrirAjusteCanon('${a.cId}')">📈 Calcular Ajuste</button>` : ''}</div>`).join('')
           : `<div style="padding:3rem; text-align:center; color:var(--ink3); font-size:14px;">✅ Sin alertas pendientes. Todo al día.</div>`;
   }
+
+  // --- AJUSTE DE CANON AUTOMÁTICO CON IPC ---
+  let _ajusteContratoId = null;
+
+  window.abrirAjusteCanon = async (cId) => {
+      _ajusteContratoId = cId;
+      const c = db.contratos.find(x => x.id === cId);
+      if(!c) return showToast("Contrato no encontrado.");
+      const prop = db.propiedades.find(x => x.id === c.pId);
+      const canonActual = (Number(c.canon) || 0) + (Number(c.mutuo) || 0);
+
+      // Calcular fechas del período a ajustar
+      // La fecha de inicio del período es la fecha de última actualización menos los meses del período
+      const periodoMeses = Number(c.periodo) || 3;
+      const fechaActStr = c.act; // YYYY-MM-DD — fecha del ajuste que vence
+      // El período empieza periodoMeses meses antes de la fecha de ajuste
+      const fechaHasta = fechaActStr.substring(0, 7); // YYYY-MM del mes de ajuste
+      const fechaDesdeDate = new Date(fechaActStr);
+      fechaDesdeDate.setMonth(fechaDesdeDate.getMonth() - periodoMeses);
+      const fechaDesde = fechaDesdeDate.toISOString().substring(0, 7);
+
+      // Calcular próxima fecha de ajuste
+      const proxFechaDate = new Date(fechaActStr);
+      proxFechaDate.setMonth(proxFechaDate.getMonth() + periodoMeses);
+      const proxFecha = proxFechaDate.toISOString().split('T')[0];
+
+      // Llenar modal
+      document.getElementById('ajuste-info').innerHTML = `
+          <b>Propiedad:</b> ${prop?.nombre || '-'}<br>
+          <b>Período a ajustar:</b> ${fechaDesde} → ${fechaHasta}<br>
+          <b>Período de contrato:</b> ${periodoMeses} meses
+      `;
+      document.getElementById('ajuste-canon-actual').value = canonActual;
+      document.getElementById('ajuste-ipc').value = 'Consultando...';
+      document.getElementById('ajuste-canon-nuevo').value = canonActual;
+      document.getElementById('ajuste-prox-fecha').value = proxFecha;
+      document.getElementById('ajuste-loading').style.display = 'block';
+      window.openModal('modal-ajuste');
+
+      // Consultar IPC INDEC
+      try {
+          const res = await fetch('https://api.argentinadatos.com/v1/finanzas/indices/inflacion');
+          const data = await res.json();
+          let acumulado = 1;
+          let mesesContados = 0;
+          data.forEach(d => {
+              const mes = (d.fecha || '').substring(0, 7);
+              if(mes >= fechaDesde && mes < fechaHasta) {
+                  acumulado *= (1 + d.valor / 100);
+                  mesesContados++;
+              }
+          });
+          document.getElementById('ajuste-loading').style.display = 'none';
+          if(mesesContados === 0) {
+              document.getElementById('ajuste-ipc').value = 'Sin datos INDEC';
+              showToast("No se encontraron datos INDEC para ese período. Podés ingresar el nuevo valor manualmente.");
+          } else {
+              const porcentaje = ((acumulado - 1) * 100).toFixed(2);
+              document.getElementById('ajuste-ipc').value = '+' + porcentaje + '% (' + mesesContados + ' meses)';
+              const nuevoCanon = Math.round(canonActual * acumulado);
+              document.getElementById('ajuste-canon-nuevo').value = nuevoCanon;
+          }
+      } catch(e) {
+          document.getElementById('ajuste-loading').style.display = 'none';
+          document.getElementById('ajuste-ipc').value = 'Error al consultar';
+          showToast("No se pudo consultar el INDEC. Podés ingresar el valor manualmente.");
+      }
+  };
+
+  document.getElementById('btn-confirmar-ajuste').onclick = async () => {
+      if(!_ajusteContratoId) return;
+      const nuevoCanon = Number(document.getElementById('ajuste-canon-nuevo').value);
+      const proxFecha = document.getElementById('ajuste-prox-fecha').value;
+      if(!nuevoCanon || nuevoCanon <= 0) return showToast("Ingresá un canon válido.");
+      if(!proxFecha) return showToast("Ingresá la próxima fecha de ajuste.");
+      try {
+          showLoading(true);
+          const idx = db.contratos.findIndex(x => x.id === _ajusteContratoId);
+          if(idx === -1) return showToast("Contrato no encontrado.");
+          const c = db.contratos[idx];
+          const periodoMeses = Number(c.periodo) || 3;
+          // El mutuo se mantiene igual, solo actualizamos el canon base
+          const canonAnterior = (Number(c.canon) || 0) + (Number(c.mutuo) || 0);
+          // Nuevo canon = valor ingresado menos mutuo (para mantener la estructura)
+          db.contratos[idx].canon = nuevoCanon - (Number(c.mutuo) || 0);
+          db.contratos[idx].act = proxFecha;
+          await safeSetDoc(db);
+          closeModal('modal-ajuste');
+          showToast("✅ Canon actualizado a $" + nuevoCanon.toLocaleString('es-AR') + ". Próximo ajuste: " + proxFecha);
+          renderAll();
+      } catch(e) {
+          showError('aplicar ajuste', e);
+      } finally {
+          showLoading(false);
+      }
+  };
 
   window.fetchIPC = async () => {
     showToast("Conectando con base de datos INDEC pública...");
