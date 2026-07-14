@@ -347,9 +347,11 @@
       <div class="nav-item" onclick="window.navigate('pagos')">Control de Cobros</div>
       
       <div class="nav-group">Soporte y Sistemas</div>
+      <div class="nav-item" onclick="window.navigate('ia-import')">🤖 Importar con IA</div>
       <div class="nav-item" onclick="window.navigate('canones')">Asistente IPC Oficial</div>
       <div class="nav-item" onclick="window.navigate('actividad')">📋 Actividad Reciente</div>
       <div class="nav-item" onclick="window.navigate('compartir')" style="color: var(--accent2); font-weight: 700;">Compartir mi Nube</div>
+      <div class="nav-item" onclick="window.navigate('config')">⚙️ Configuración</div>
       <div class="nav-item" onclick="window.cerrarSesion()" style="margin-top:auto; opacity:0.6; padding: 2.5rem 2rem;">Finalizar Sesión</div>
     </nav>
   </aside>
@@ -434,6 +436,74 @@
               <div class="tab active" id="tab-mes" onclick="window.switchPagosTab('mes')">Mes Actual</div>
               <div class="tab" id="tab-hist" onclick="window.switchPagosTab('hist')">Historial de Cobros</div>
           </div>
+
+          <!-- Filtros — solo visibles en historial -->
+          <div id="hist-filtros" style="display:none; background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:1rem 1.25rem; margin-bottom:1rem;">
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:10px; margin-bottom:10px;">
+                  <div class="form-group">
+                      <label class="form-label">Inmueble</label>
+                      <select class="form-select" id="hist-f-prop" onchange="window.aplicarFiltrosHistorial()">
+                          <option value="">Todos</option>
+                      </select>
+                  </div>
+                  <div class="form-group">
+                      <label class="form-label">Inquilino</label>
+                      <select class="form-select" id="hist-f-inq" onchange="window.aplicarFiltrosHistorial()">
+                          <option value="">Todos</option>
+                      </select>
+                  </div>
+                  <div class="form-group">
+                      <label class="form-label">Desde (mes)</label>
+                      <input class="form-input" type="month" id="hist-f-desde" onchange="window.aplicarFiltrosHistorial()">
+                  </div>
+                  <div class="form-group">
+                      <label class="form-label">Hasta (mes)</label>
+                      <input class="form-input" type="month" id="hist-f-hasta" onchange="window.aplicarFiltrosHistorial()">
+                  </div>
+                  <div class="form-group">
+                      <label class="form-label">Estado</label>
+                      <select class="form-select" id="hist-f-estado" onchange="window.aplicarFiltrosHistorial()">
+                          <option value="">Todos</option>
+                          <option value="vigente">Vigentes</option>
+                          <option value="anulado">Anulados</option>
+                      </select>
+                  </div>
+                  <div class="form-group">
+                      <label class="form-label">Moneda</label>
+                      <select class="form-select" id="hist-f-moneda" onchange="window.aplicarFiltrosHistorial()">
+                          <option value="">Todas</option>
+                          <option value="ARS">ARS $</option>
+                          <option value="USD">USD U$S</option>
+                      </select>
+                  </div>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                  <button class="btn btn-sm" onclick="window.limpiarFiltrosHistorial()">✕ Limpiar filtros</button>
+                  <button class="btn btn-sm" onclick="window.exportarHistorialCSV()">⬇ Exportar CSV</button>
+                  <span id="hist-resumen" style="font-size:12px; color:var(--ink3); margin-left:auto;"></span>
+              </div>
+          </div>
+
+          <!-- Totalizadores historial -->
+          <div id="hist-totales" style="display:none; display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:1rem;">
+              <div class="card" style="padding:1rem; text-align:center;">
+                  <div style="font-size:11px; color:var(--ink3); text-transform:uppercase; letter-spacing:0.05em;">Cobros filtrados</div>
+                  <div style="font-size:22px; font-weight:700; margin-top:4px;" id="hist-total-count">0</div>
+              </div>
+              <div class="card" style="padding:1rem; text-align:center;">
+                  <div style="font-size:11px; color:var(--ink3); text-transform:uppercase; letter-spacing:0.05em;">Total ARS</div>
+                  <div style="font-size:20px; font-weight:700; margin-top:4px; color:var(--green);" id="hist-total-ars">$ 0</div>
+              </div>
+              <div class="card" style="padding:1rem; text-align:center;">
+                  <div style="font-size:11px; color:var(--ink3); text-transform:uppercase; letter-spacing:0.05em;">Total USD</div>
+                  <div style="font-size:20px; font-weight:700; margin-top:4px; color:var(--blue);" id="hist-total-usd">U$S 0</div>
+              </div>
+              <div class="card" style="padding:1rem; text-align:center;">
+                  <div style="font-size:11px; color:var(--ink3); text-transform:uppercase; letter-spacing:0.05em;">Anulados</div>
+                  <div style="font-size:22px; font-weight:700; margin-top:4px; color:var(--red);" id="hist-total-anulados">0</div>
+              </div>
+          </div>
+
           <div class="card"><div id="pagos-list" class="table-wrap"></div></div>
       </div>
 
@@ -460,6 +530,130 @@
                   <h3>Nubes Invitadas</h3>
                   <p style="font-size:12px; color:var(--ink3); margin-bottom: 1.5rem;">Haz clic en la nube de un socio para visualizar su información.</p>
                   <div id="shared-workspaces"></div>
+              </div>
+          </div>
+      </div>
+
+      <!-- SECCIÓN CONFIGURACIÓN DE ALERTAS EMAIL -->
+      <div id="section-config" class="section">
+          <div class="section-header"><h1>⚙️ Configuración</h1></div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; max-width:900px;">
+              <div class="card" style="padding:2rem; grid-column:1/-1;">
+                  <h3 style="margin-bottom:1rem;">📧 Alertas por Email</h3>
+                  <p style="font-size:13px; color:var(--ink3); margin-bottom:1.5rem;">
+                      Configurá tu cuenta de <b>EmailJS</b> para recibir alertas automáticas de vencimientos, cobros y actualizaciones de canon.<br>
+                      <a href="https://www.emailjs.com" target="_blank" style="color:var(--accent);">Crear cuenta gratis en emailjs.com →</a>
+                  </p>
+                  <div class="form-grid">
+                      <div class="form-group">
+                          <label class="form-label">EmailJS Service ID</label>
+                          <input class="form-input" id="cfg-ejs-service" placeholder="service_xxxxxxx">
+                      </div>
+                      <div class="form-group">
+                          <label class="form-label">EmailJS Template ID</label>
+                          <input class="form-input" id="cfg-ejs-template" placeholder="template_xxxxxxx">
+                      </div>
+                      <div class="form-group">
+                          <label class="form-label">EmailJS Public Key</label>
+                          <input class="form-input" id="cfg-ejs-key" placeholder="tu_public_key">
+                      </div>
+                      <div class="form-group">
+                          <label class="form-label">Email destino (el tuyo)</label>
+                          <input class="form-input" id="cfg-email-destino" type="email" placeholder="tumail@gmail.com">
+                      </div>
+                      <div class="form-group form-full" style="display:flex; align-items:center; gap:12px;">
+                          <input type="checkbox" id="cfg-alerta-cobros" style="width:18px;height:18px;">
+                          <label for="cfg-alerta-cobros" style="font-size:13px;">Alertar cuando se acerca el día de cobro (5 días antes)</label>
+                      </div>
+                      <div class="form-group form-full" style="display:flex; align-items:center; gap:12px;">
+                          <input type="checkbox" id="cfg-alerta-venc" style="width:18px;height:18px;">
+                          <label for="cfg-alerta-venc" style="font-size:13px;">Alertar cuando vence un contrato (60 y 30 días antes)</label>
+                      </div>
+                      <div class="form-group form-full" style="display:flex; align-items:center; gap:12px;">
+                          <input type="checkbox" id="cfg-alerta-canon" style="width:18px;height:18px;">
+                          <label for="cfg-alerta-canon" style="font-size:13px;">Alertar cuando hay que actualizar un canon (15 días antes)</label>
+                      </div>
+                  </div>
+                  <div style="display:flex; gap:10px; margin-top:1.5rem; flex-wrap:wrap;">
+                      <button class="btn btn-primary" onclick="window.guardarConfigEmail()">💾 Guardar configuración</button>
+                      <button class="btn" onclick="window.testEmail()">📨 Enviar email de prueba</button>
+                      <button class="btn btn-accent" onclick="window.verificarYEnviarAlertas()">🔔 Verificar alertas ahora</button>
+                  </div>
+                  <div id="cfg-status" style="margin-top:1rem; font-size:12px; color:var(--ink3);"></div>
+              </div>
+          </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- SECCIÓN: IMPORTAR CONTRATO CON IA                   -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div id="section-ia-import" class="section">
+          <div class="section-header">
+              <h1>🤖 Importar Contrato con IA</h1>
+              <p style="font-size:13px; color:var(--ink3); margin-top:4px;">Pegá el texto de tu email o subí el Word del contrato/mutuo — la IA extrae todos los datos y los carga al sistema.</p>
+          </div>
+
+          <!-- API Key config -->
+          <div class="card" style="padding:1.25rem 1.5rem; margin-bottom:1rem; display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
+              <div style="flex:1; min-width:200px;">
+                  <label class="form-label">Google Gemini API Key</label>
+                  <input class="form-input" id="ia-api-key" type="password" placeholder="AIza..." style="margin-top:4px;">
+                  <div style="font-size:11px; color:var(--ink3); margin-top:4px;">Se guarda solo en este navegador. <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">Obtener gratis en aistudio.google.com →</a></div>
+              </div>
+              <button class="btn btn-sm" onclick="window.guardarAPIKey()">💾 Guardar key</button>
+              <span id="ia-key-status" style="font-size:12px; color:var(--ink3);"></span>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+              <!-- Panel izquierdo: entrada -->
+              <div style="display:flex; flex-direction:column; gap:1rem;">
+                  <div class="card" style="padding:1.25rem 1.5rem;">
+                      <div style="font-size:13px; font-weight:600; margin-bottom:0.75rem;">📧 Texto del email / propuesta</div>
+                      <textarea id="ia-email-texto" class="form-textarea" style="min-height:180px; font-size:12px;" placeholder="Pegá acá el cuerpo del email que mandaste al inquilino...&#10;&#10;Ej: &#34;Estimado Juan, le informo que el alquiler del local en Av. Corrientes 1450 será de $350.000 mensuales más $50.000 de mutuo, con vencimiento el 30/06/2026...&#34;"></textarea>
+                  </div>
+                  <div class="card" style="padding:1.25rem 1.5rem;">
+                      <div style="font-size:13px; font-weight:600; margin-bottom:0.75rem;">📄 Documentos Word (opcional)</div>
+                      <div class="form-grid">
+                          <div class="form-group">
+                              <label class="form-label">Contrato (.docx)</label>
+                              <input type="file" id="ia-file-contrato" class="form-input" accept=".docx,.doc,.txt" style="font-size:12px;">
+                          </div>
+                          <div class="form-group">
+                              <label class="form-label">Mutuo (.docx)</label>
+                              <input type="file" id="ia-file-mutuo" class="form-input" accept=".docx,.doc,.txt" style="font-size:12px;">
+                          </div>
+                      </div>
+                      <div style="font-size:11px; color:var(--ink3); margin-top:8px;">💡 Los .docx se leen como texto plano. Si son escaneados (imagen) no se podrán leer.</div>
+                  </div>
+                  <button class="btn btn-accent" style="width:100%; padding:14px; font-size:14px; font-weight:700;" onclick="window.analizarConIA()">
+                      🤖 Analizar con IA y extraer datos
+                  </button>
+              </div>
+
+              <!-- Panel derecho: resultado IA -->
+              <div class="card" style="padding:1.25rem 1.5rem; display:flex; flex-direction:column;">
+                  <div style="font-size:13px; font-weight:600; margin-bottom:0.75rem;">📋 Datos extraídos por la IA</div>
+                  <div id="ia-resultado" style="flex:1; min-height:200px; background:var(--bg); border-radius:8px; padding:1rem; font-size:13px; color:var(--ink3); line-height:1.6;">
+                      Los datos extraídos aparecerán acá...
+                  </div>
+                  <div id="ia-preguntas" style="display:none; margin-top:1rem; padding:1rem; background:#FFF8E1; border-radius:8px; border-left:4px solid #F59E0B;">
+                      <div style="font-size:12px; font-weight:600; color:#92400E; margin-bottom:0.5rem;">❓ La IA necesita que aclares:</div>
+                      <div id="ia-preguntas-lista" style="font-size:13px;"></div>
+                  </div>
+                  <div id="ia-acciones" style="display:none; margin-top:1rem; display:none; gap:8px; flex-wrap:wrap;">
+                      <button class="btn btn-primary" style="flex:1;" onclick="window.precargarFormulario()">✅ Precargar formulario de contrato</button>
+                      <button class="btn" onclick="window.limpiarIA()">🔄 Limpiar</button>
+                  </div>
+              </div>
+          </div>
+
+          <!-- Chat de aclaraciones -->
+          <div id="ia-chat-wrap" style="display:none;" class="card" style="padding:1.25rem 1.5rem;">
+              <div style="font-size:13px; font-weight:600; margin-bottom:0.75rem;">💬 Aclaraciones a la IA</div>
+              <div id="ia-chat-historial" style="max-height:200px; overflow-y:auto; background:var(--bg); border-radius:8px; padding:1rem; margin-bottom:0.75rem; font-size:13px; line-height:1.6;"></div>
+              <div style="display:flex; gap:8px;">
+                  <input class="form-input" id="ia-chat-input" placeholder="Respondé las preguntas o aclará algo más..." style="flex:1;">
+                  <button class="btn btn-primary" onclick="window.responderIA()">Enviar</button>
               </div>
           </div>
       </div>
@@ -685,8 +879,13 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 <script>
-  // Firebase compat API — funciona con file:// sin servidor local
+  // Guard: verificar que Firebase cargó correctamente
+  if(typeof firebase === 'undefined') {
+      document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;gap:1rem;padding:2rem;text-align:center;"><div style="font-size:48px;">⚠️</div><h2>Error al cargar Firebase</h2><p style="color:#666;max-width:400px;">No se pudieron cargar las librerías. Verificá tu conexión a internet y recargá la página.</p><button onclick="location.reload()" style="padding:10px 24px;background:#1a1714;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;">🔄 Recargar</button></div>';
+      throw new Error('Firebase no disponible.');
+  }
 
   // CONFIGURACIÓN DE FIREBASE
   const firebaseConfig = {
@@ -871,26 +1070,27 @@
             </tr>`;
         }).join('') + "</tbody></table>";
     } else {
-        const historial = [...(db.pagos || [])].sort((a,b) => b.fecha.localeCompare(a.fecha));
-        if(!historial.length) { 
-            cont.innerHTML = "<p style='padding:30px; color:var(--ink3); font-weight:600;'>No hay registros previos en el historial de cobros.</p>"; 
-            return; 
+        // Mostrar panel de filtros y totales
+        const filtrosEl = document.getElementById('hist-filtros');
+        const totalesEl = document.getElementById('hist-totales');
+        if(filtrosEl) filtrosEl.style.display = '';
+        if(totalesEl) totalesEl.style.display = 'grid';
+
+        // Poblar selectores de filtro
+        const selProp = document.getElementById('hist-f-prop');
+        const selInq = document.getElementById('hist-f-inq');
+        if(selProp) {
+            const propActual = selProp.value;
+            selProp.innerHTML = '<option value="">Todos los inmuebles</option>' + 
+                (db.propiedades||[]).map(p => `<option value="${p.id}" ${p.id===propActual?'selected':''}>${p.nombre}</option>`).join('');
         }
-        
-        cont.innerHTML = "<table><thead><tr><th>Fecha Cobro</th><th>Propiedad</th><th>Pagador</th><th>Mes Aplicado</th><th>Monto Impactado</th><th>Acción</th></tr></thead><tbody>" + historial.map(pg => {
-            // FIX: proteger contra contrato undefined (pagos históricos o masivos sin cId)
-            const c = (db.contratos || []).find(x => x.id === pg.cId);
-            const p = c ? (db.propiedades || []).find(x => x.id === c.pId) : null;
-            const inq = c ? (db.personas || []).find(x => x.id === c.inqId) : null;
-            return `<tr>
-                <td>${pg.fecha || '-'}</td>
-                <td>${p?.nombre || 'S/N'}</td>
-                <td>${inq?.nombre || '-'}</td>
-                <td>${pg.periodoDesde && pg.periodoHasta && pg.periodoDesde !== pg.periodoHasta ? pg.periodoDesde + ' → ' + pg.periodoHasta : (pg.periodo || '-')}</td>
-                <td class='mono'>$ ${(pg.monto || 0).toLocaleString('es-AR')}</td>
-                <td style="display:flex; gap:6px;">${pg.anulado ? '<span class="badge badge-danger">ANULADO</span>' : `<button class='btn btn-sm' onclick="window.verRecibo('${pg.id}')">📄 Recibo</button><button class='btn btn-sm btn-danger' onclick="window.anularCobro('${pg.id}')">Anular</button>`}</td>
-            </tr>`;
-        }).join('') + "</tbody></table>";
+        if(selInq) {
+            const inqActual = selInq.value;
+            selInq.innerHTML = '<option value="">Todos los inquilinos</option>' + 
+                (db.personas||[]).map(p => `<option value="${p.id}" ${p.id===inqActual?'selected':''}>${p.nombre}</option>`).join('');
+        }
+
+        window.aplicarFiltrosHistorial();
     }
   }
 
@@ -901,20 +1101,68 @@
       
       // Módulo Personas (Directorio Relacional Maestro)
       const pList = document.getElementById('personas-list');
-      if(pList) pList.innerHTML = "<table><thead><tr><th>Identidad</th><th>Rol Sugerido</th><th>DNI / CUIT</th><th>Documentación</th><th>Acción</th></tr></thead><tbody>" + (db.personas || []).map(p => `<tr><td><b>${p.nombre}</b></td><td>${p.rol || 'Inquilino'}</td><td>${p.dni}</td><td>${p.pdfUrl ? `<a href='${p.pdfUrl}' target='_blank' class='badge badge-success'>📄 Ver PDF</a>` : '-'}</td><td><button class='btn btn-sm' onclick="window.editPersona('${p.id}')">Editar Ficha</button></td></tr>`).join('') + "</tbody></table>";
+      if(pList) {
+          const todasPersonas = (db.personas || []);
+          const activas = todasPersonas.filter(p => !p.archivado);
+          const archivadas = todasPersonas.filter(p => p.archivado);
+          const filas = [...activas, ...archivadas].map(p => {
+              const estadoBadge = p.archivado
+                  ? '<span class="badge" style="background:#fee2e2;color:#991b1b;">Archivado</span>'
+                  : '<span class="badge badge-success">Activo</span>';
+              const rowStyle = p.archivado ? 'opacity:0.55;' : '';
+              const acciones = !p.archivado
+                  ? `<button class='btn btn-sm' onclick="window.editPersona('${p.id}')">Editar</button>
+                     <button class='btn btn-sm btn-danger' onclick="window.archivarPersona('${p.id}')">Archivar</button>`
+                  : `<button class='btn btn-sm' onclick="window.restaurarPersona('${p.id}')">Restaurar</button>`;
+              return `<tr style="${rowStyle}">
+                  <td><b>${p.nombre}</b></td>
+                  <td>${p.rol || 'Inquilino'}</td>
+                  <td class="mono">${p.dni || '-'}</td>
+                  <td>${p.pdfUrl ? `<a href='${p.pdfUrl}' target='_blank' class='badge badge-success'>📄 Ver PDF</a>` : '-'}</td>
+                  <td>${estadoBadge}</td>
+                  <td><div style="display:flex;gap:5px;flex-wrap:wrap;">${acciones}</div></td>
+              </tr>`;
+          }).join('');
+          pList.innerHTML = '<table><thead><tr><th>Identidad</th><th>Rol</th><th>DNI / CUIT</th><th>Documentación</th><th>Estado</th><th>Acción</th></tr></thead><tbody>' + filas + '</tbody></table>';
+      }
       
       // Módulo Propiedades (Base de Inmuebles Relacional)
       const propList = document.getElementById('props-list');
-      if(propList) propList.innerHTML = "<table><thead><tr><th>Nombre Inmueble</th><th>Titular Registral</th><th>Servicios Registrados</th><th>Acción</th></tr></thead><tbody>" + (db.propiedades || []).map(p => `<tr><td><b>${p.nombre}</b><br><small>${p.direccion || '-'}</small></td><td>${p.titular || '-'}</td><td>Luz: ${p.luz||'-'} / Gas: ${p.gas||'-'}</td><td><button class='btn btn-sm' onclick="window.editProp('${p.id}')">Editar Ficha</button></td></tr>`).join('') + "</tbody></table>";
+      if(propList) {
+          const todasProps = (db.propiedades || []);
+          const activas = todasProps.filter(p => !p.eliminado);
+          const archivadas = todasProps.filter(p => p.eliminado);
+          const filas = [...activas, ...archivadas].map(p => {
+              const estadoBadge = p.eliminado ? '<span class="badge" style="background:#fee2e2;color:#991b1b;">Archivado</span>' : '<span class="badge badge-success">Activo</span>';
+              const rowStyle = p.eliminado ? 'opacity:0.55;' : '';
+              const acciones = !p.eliminado
+                  ? `<button class='btn btn-sm' onclick="window.editProp('${p.id}')">Editar</button>
+                     <button class='btn btn-sm btn-danger' onclick="window.archivarProp('${p.id}')">Archivar</button>`
+                  : `<button class='btn btn-sm' onclick="window.restaurarProp('${p.id}')">Restaurar</button>`;
+              return `<tr style="${rowStyle}"><td><b>${p.nombre}</b><br><small>${p.direccion||'-'}</small></td><td>${p.titular||'-'}</td><td>Luz: ${p.luz||'-'} / Gas: ${p.gas||'-'}</td><td>${estadoBadge}</td><td><div style="display:flex;gap:5px;flex-wrap:wrap;">${acciones}</div></td></tr>`;
+          }).join('');
+          propList.innerHTML = '<table><thead><tr><th>Nombre Inmueble</th><th>Titular Registral</th><th>Servicios</th><th>Estado</th><th>Acción</th></tr></thead><tbody>' + filas + '</tbody></table>';
+      }
       
       // Módulo Vínculos de Contratos (Cruce de Datos)
       const cList = document.getElementById('contratos-list');
-      if(cList) cList.innerHTML = "<table><thead><tr><th>Propiedad</th><th>Responsables</th><th>Documentos PDFs</th><th>Vencimiento</th><th>Acción</th></tr></thead><tbody>" + (db.contratos || []).map(c => {
+      if(cList) cList.innerHTML = "<table><thead><tr><th>Propiedad</th><th>Responsables</th><th>Documentos PDFs</th><th>Vencimiento</th><th>Estado</th><th>Acción</th></tr></thead><tbody>" + (db.contratos || []).map(c => {
           const p = db.propiedades.find(x => x.id === c.pId);
           const inq = db.personas.find(x => x.id === c.inqId);
           const gar = db.personas.find(x => x.id === c.garId);
           let d = []; if(c.contractUrl) d.push(`<a href='${c.contractUrl}' target='_blank' class='badge badge-success'>CONTRATO</a>`); if(c.mutuoUrl) d.push(`<a href='${c.mutuoUrl}' target='_blank' class='badge badge-success'>MUTUO</a>`); if(c.pagaresUrl) d.push(`<a href='${c.pagaresUrl}' target='_blank' class='badge badge-success'>PAGARÉS</a>`);
-          return `<tr><td><b>${p?.nombre || '-'}</b></td><td>Inq: ${inq?.nombre || '-'}<br><small>Garante: ${gar?.nombre || 'N/A'}</small></td><td><div style="display:flex;gap:6px;">${d.join('') || '-'}</div></td><td>${c.venc || '-'}</td><td><div style="display:flex;gap:5px;"><button class='btn btn-sm' onclick="window.editContrato('${c.id}')">Editar</button><button class='btn btn-sm btn-danger' onclick="window.borrarContrato('${c.id}')">Eliminar</button></div></td></tr>`;
+          const estadoContrato = c.finalizado 
+              ? `<span class="badge" style="background:#fee2e2;color:#991b1b;">Finalizado ${c.finalizadoFecha||''}</span>`
+              : (c.venc && c.venc < new Date().toISOString().split('T')[0] 
+                  ? '<span class="badge badge-danger">Vencido</span>' 
+                  : '<span class="badge badge-success">Vigente</span>');
+          const rowStyle = c.finalizado ? 'opacity:0.55;' : '';
+          const acciones = !c.finalizado
+              ? `<button class='btn btn-sm' onclick="window.editContrato('${c.id}')">Editar</button>
+                 <button class='btn btn-sm' style="background:#fff3cd;" onclick="window.finalizarContrato('${c.id}')">Finalizar</button>
+                 <button class='btn btn-sm btn-danger' onclick="window.borrarContrato('${c.id}')">Eliminar</button>`
+              : `<button class='btn btn-sm btn-danger' onclick="window.borrarContrato('${c.id}')">Eliminar</button>`;
+          return `<tr style="${rowStyle}"><td><b>${p?.nombre || '-'}</b></td><td>Inq: ${inq?.nombre || '-'}<br><small>Garante: ${gar?.nombre || 'N/A'}</small></td><td><div style="display:flex;gap:6px;">${d.join('') || '-'}</div></td><td>${c.venc || '-'}</td><td>${estadoContrato}</td><td><div style="display:flex;gap:5px;flex-wrap:wrap;">${acciones}</div></td></tr>`;
       }).join('') + "</tbody></table>";
       
       // Dashboard Tabla de Resumen Rápido
@@ -973,15 +1221,18 @@
       document.querySelectorAll('.section').forEach(s => s.classList.remove('active')); 
       const target = document.getElementById('section-' + id); 
       if(target) target.classList.add('active'); 
-      // FIX: marcar el nav item correcto como activo
+      // Marcar nav item activo correctamente
       document.querySelectorAll('.nav-item').forEach(n => {
           n.classList.remove('active');
           const oc = n.getAttribute('onclick') || '';
-          if(oc.includes(`Maps('${id}')`)) n.classList.add('active'); // CORREGIDO AQUÍ
+          if(oc.includes("navigate('" + id + "')")) n.classList.add('active');
       });
       document.getElementById('topbar-title').textContent = id.charAt(0).toUpperCase() + id.slice(1); 
       const sidebar = document.getElementById('sidebar'); if (sidebar) sidebar.classList.remove('open'); 
       document.querySelector('.main').scrollTop = 0;
+      if(id === 'config') poblarConfigEmail();
+      if(id === 'ia-import') cargarAPIKey();
+      if(id === 'actividad') window.renderActividad();
   };
   
   window.closeModal = (id) => { const m = document.getElementById(id); if (m) m.classList.remove('open'); };
@@ -1326,6 +1577,7 @@
           if (snap.exists) {
               db = snap.data();
               renderAll();
+              verificarAlertasAuto();
           } else if(uid === currentUser?.uid) {
               // Documento nuevo — crear estructura vacía
               try {
@@ -1450,12 +1702,593 @@
       document.getElementById('modal-recibo').classList.add('open'); 
   };
 
-  window.borrarContrato = async (id) => { if(confirm("¿Seguro que deseas eliminar este vínculo? Los cobros asociados se mantendrán pero el contrato desaparecerá.")) { db.contratos = db.contratos.filter(x => x.id !== id); await safeSetDoc(db); } };
+  // ── ARCHIVAR PERSONA (soft delete — preserva historial) ──
+  window.archivarPersona = async (id) => {
+      const persona = (db.personas || []).find(x => x.id === id);
+      if(!persona) return;
+      // Verificar si tiene contratos activos como inquilino o garante
+      const contratosActivos = (db.contratos || []).filter(c =>
+          !c.finalizado && (c.inqId === id || c.garId === id || c.cogarId === id)
+      );
+      let msg = `¿Archivar a "${persona.nombre}"?\n\nLa persona quedará desactivada pero se conservará todo su historial.`;
+      if(contratosActivos.length > 0)
+          msg += `\n\n⚠️ Esta persona figura en ${contratosActivos.length} contrato(s) activo(s). Verificá antes de continuar.`;
+      if(!confirm(msg)) return;
+      try {
+          showLoading(true);
+          const idx = db.personas.findIndex(x => x.id === id);
+          db.personas[idx].archivado = true;
+          db.personas[idx].archivadoFecha = new Date().toISOString().split('T')[0];
+          logActividad('persona', `Persona archivada: ${persona.nombre}`);
+          await safeSetDoc(db);
+          showToast(`✅ "${persona.nombre}" archivado/a. El historial se conserva.`);
+          renderAll();
+      } catch(e) { showError('archivar persona', e); }
+      finally { showLoading(false); }
+  };
+
+  // ── RESTAURAR PERSONA ARCHIVADA ──
+  window.restaurarPersona = async (id) => {
+      const persona = (db.personas || []).find(x => x.id === id);
+      if(!persona) return;
+      if(!confirm(`¿Restaurar a "${persona.nombre}" como activo/a?`)) return;
+      try {
+          showLoading(true);
+          const idx = db.personas.findIndex(x => x.id === id);
+          db.personas[idx].archivado = false;
+          delete db.personas[idx].archivadoFecha;
+          logActividad('persona', `Persona restaurada: ${persona.nombre}`);
+          await safeSetDoc(db);
+          showToast(`✅ "${persona.nombre}" restaurado/a como activo/a.`);
+          renderAll();
+      } catch(e) { showError('restaurar persona', e); }
+      finally { showLoading(false); }
+  };
+
+  // ── ARCHIVAR INMUEBLE (soft delete — preserva historial) ──
+  window.archivarProp = async (id) => {
+      const prop = (db.propiedades || []).find(x => x.id === id);
+      if(!prop) return;
+      const contratos_activos = (db.contratos || []).filter(x => x.pId === id && !x.finalizado);
+      let confirmMsg = `¿Archivar el inmueble "${prop.nombre}"?\n\nEl inmueble quedará desactivado pero se conservará todo el historial de pagos y contratos.`;
+      if(contratos_activos.length > 0) confirmMsg += `\n\n⚠️ Este inmueble tiene ${contratos_activos.length} vínculo(s) de contrato activo(s). Se recomienda finalizarlos primero.`;
+      if(!confirm(confirmMsg)) return;
+      try {
+          showLoading(true);
+          const idx = db.propiedades.findIndex(x => x.id === id);
+          db.propiedades[idx].eliminado = true;
+          db.propiedades[idx].eliminadoFecha = new Date().toISOString().split('T')[0];
+          logActividad('propiedad', `Inmueble archivado: ${prop.nombre}`);
+          await safeSetDoc(db);
+          showToast(`✅ "${prop.nombre}" archivado. El historial se conserva.`);
+          renderAll();
+      } catch(e) { showError('archivar inmueble', e); }
+      finally { showLoading(false); }
+  };
+
+  // ── RESTAURAR INMUEBLE ARCHIVADO ──
+  window.restaurarProp = async (id) => {
+      const prop = (db.propiedades || []).find(x => x.id === id);
+      if(!prop) return;
+      if(!confirm(`¿Restaurar el inmueble "${prop.nombre}" como activo?`)) return;
+      try {
+          showLoading(true);
+          const idx = db.propiedades.findIndex(x => x.id === id);
+          db.propiedades[idx].eliminado = false;
+          delete db.propiedades[idx].eliminadoFecha;
+          logActividad('propiedad', `Inmueble restaurado: ${prop.nombre}`);
+          await safeSetDoc(db);
+          showToast(`✅ "${prop.nombre}" restaurado como activo.`);
+          renderAll();
+      } catch(e) { showError('restaurar inmueble', e); }
+      finally { showLoading(false); }
+  };
+
+  // ── FINALIZAR CONTRATO ANTICIPADAMENTE ──
+  window.finalizarContrato = async (id) => {
+      const c = (db.contratos || []).find(x => x.id === id);
+      if(!c) return;
+      const prop = (db.propiedades || []).find(x => x.id === c.pId);
+      const inq = (db.personas || []).find(x => x.id === c.inqId);
+      const motivo = prompt(`Finalizar contrato de "${prop?.nombre || 'inmueble'}" con ${inq?.nombre || 'inquilino'}\n\n¿Motivo de la finalización anticipada? (requerido)`);
+      if(motivo === null) return;
+      if(!motivo.trim()) return showToast("Ingresá un motivo para finalizar el contrato.");
+      const fechaFin = prompt("¿Fecha de finalización efectiva? (AAAA-MM-DD)", new Date().toISOString().split('T')[0]);
+      if(!fechaFin) return;
+      try {
+          showLoading(true);
+          const idx = db.contratos.findIndex(x => x.id === id);
+          db.contratos[idx].finalizado = true;
+          db.contratos[idx].finalizadoFecha = fechaFin;
+          db.contratos[idx].finalizadoMotivo = motivo.trim();
+          logActividad('contrato', `Contrato finalizado anticipadamente: ${prop?.nombre||'S/N'} — Motivo: ${motivo.trim()}`);
+          await safeSetDoc(db);
+          showToast("✅ Contrato finalizado. El historial de cobros se conserva.");
+          renderAll();
+      } catch(e) { showError('finalizar contrato', e); }
+      finally { showLoading(false); }
+  };
+
+  // ── ELIMINAR CONTRATO (con confirmación — mantiene pagos históricos) ──
+  window.borrarContrato = async (id) => {
+      const c = (db.contratos || []).find(x => x.id === id);
+      if(!c) return;
+      const prop = (db.propiedades || []).find(x => x.id === c.pId);
+      const pagosAsociados = (db.pagos || []).filter(x => x.cId === id).length;
+      if(!confirm(`¿Eliminar el vínculo de contrato de "${prop?.nombre || 'este inmueble'}"?\n\n` +
+          (pagosAsociados > 0 ? `⚠️ Este contrato tiene ${pagosAsociados} cobro(s) registrado(s) que se conservarán en el historial.\n\n` : '') +
+          `Esta acción no se puede deshacer. Si el contrato terminó, preferí usar "Finalizar".`)) return;
+      try {
+          showLoading(true);
+          db.contratos = db.contratos.filter(x => x.id !== id);
+          logActividad('contrato', `Contrato eliminado: ${prop?.nombre||'S/N'}`);
+          await safeSetDoc(db);
+          showToast("Vínculo eliminado. Los cobros históricos se conservan.");
+          renderAll();
+      } catch(e) { showError('eliminar contrato', e); }
+      finally { showLoading(false); }
+  };
   
   window.switchPagosTab = (t) => { 
-      currentPagosTab = t; renderPagos(); 
+      currentPagosTab = t;
+      // Ocultar filtros si volvemos a Mes Actual
+      const filtrosEl = document.getElementById('hist-filtros');
+      const totalesEl = document.getElementById('hist-totales');
+      if(filtrosEl) filtrosEl.style.display = t === 'mes' ? 'none' : '';
+      if(totalesEl) totalesEl.style.display = t === 'mes' ? 'none' : 'grid';
+      renderPagos(); 
       document.getElementById('tab-mes').classList.toggle('active', t === 'mes');
       document.getElementById('tab-hist').classList.toggle('active', t === 'hist');
+  };
+
+  window.aplicarFiltrosHistorial = () => {
+      const cont = document.getElementById('pagos-list');
+      if(!cont) return;
+
+      const fProp   = document.getElementById('hist-f-prop')?.value  || '';
+      const fInq    = document.getElementById('hist-f-inq')?.value   || '';
+      const fDesde  = document.getElementById('hist-f-desde')?.value || '';
+      const fHasta  = document.getElementById('hist-f-hasta')?.value || '';
+      const fEstado = document.getElementById('hist-f-estado')?.value || '';
+      const fMoneda = document.getElementById('hist-f-moneda')?.value || '';
+
+      let historial = [...(db.pagos || [])].sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+
+      historial = historial.filter(pg => {
+          const c = (db.contratos||[]).find(x => x.id === pg.cId);
+          const p = c ? (db.propiedades||[]).find(x => x.id === c.pId) : null;
+          const inq = c ? (db.personas||[]).find(x => x.id === c.inqId) : null;
+
+          if(fProp && p?.id !== fProp) return false;
+          if(fInq  && inq?.id !== fInq) return false;
+
+          // Filtro por rango de mes
+          const mesPg = pg.periodo || pg.periodoDesde || '';
+          if(fDesde && mesPg && mesPg < fDesde) return false;
+          if(fHasta && mesPg && mesPg > fHasta)  return false;
+
+          // Estado
+          if(fEstado === 'vigente' && pg.anulado) return false;
+          if(fEstado === 'anulado' && !pg.anulado) return false;
+
+          // Moneda
+          if(fMoneda) {
+              const monedaContrato = c?.moneda || 'ARS';
+              if(monedaContrato !== fMoneda) return false;
+          }
+
+          return true;
+      });
+
+      // Calcular totales
+      let totalARS = 0, totalUSD = 0, totalAnulados = 0;
+      historial.forEach(pg => {
+          const c = (db.contratos||[]).find(x => x.id === pg.cId);
+          const moneda = c?.moneda || 'ARS';
+          if(pg.anulado) { totalAnulados++; return; }
+          if(moneda === 'USD') totalUSD += pg.monto || 0;
+          else totalARS += pg.monto || 0;
+      });
+
+      // Actualizar totalizadores
+      const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+      set('hist-total-count', historial.length);
+      set('hist-total-ars', '$ ' + totalARS.toLocaleString('es-AR'));
+      set('hist-total-usd', 'U$S ' + totalUSD.toLocaleString('es-AR'));
+      set('hist-total-anulados', totalAnulados);
+
+      // Resumen texto
+      const resumen = document.getElementById('hist-resumen');
+      if(resumen) resumen.textContent = historial.length + ' registro(s) encontrado(s)';
+
+      if(!historial.length) {
+          cont.innerHTML = "<p style='padding:30px; color:var(--ink3); text-align:center;'>No hay cobros que coincidan con los filtros aplicados.</p>";
+          return;
+      }
+
+      cont.innerHTML = "<table><thead><tr>" +
+          "<th>Fecha Cobro</th><th>Inmueble</th><th>Inquilino</th>" +
+          "<th>Período</th><th>Monto</th><th>Moneda</th><th>Medio</th><th>Estado</th><th>Acciones</th>" +
+          "</tr></thead><tbody>" +
+          historial.map(pg => {
+              const c   = (db.contratos||[]).find(x => x.id === pg.cId);
+              const p   = c ? (db.propiedades||[]).find(x => x.id === c.pId) : null;
+              const inq = c ? (db.personas||[]).find(x => x.id === c.inqId) : null;
+              const moneda = c?.moneda || 'ARS';
+              const simbolo = moneda === 'USD' ? 'U$S' : '$';
+              const periodo = pg.periodoDesde && pg.periodoHasta && pg.periodoDesde !== pg.periodoHasta
+                  ? pg.periodoDesde + ' → ' + pg.periodoHasta
+                  : (pg.periodo || '-');
+              const estadoBadge = pg.anulado
+                  ? `<span class="badge badge-danger">ANULADO</span><br><small style="font-size:10px;color:var(--ink3);">${pg.anuladoMotivo||''}</small>`
+                  : '<span class="badge badge-success">Válido</span>';
+              const rowStyle = pg.anulado ? 'opacity:0.5; background:#fff5f5;' : '';
+              const acciones = pg.anulado
+                  ? '-'
+                  : `<div style="display:flex;gap:5px;flex-wrap:wrap;">
+                       <button class='btn btn-sm' onclick="window.verRecibo('${pg.id}')">📄 Recibo</button>
+                       <button class='btn btn-sm btn-danger' onclick="window.anularCobro('${pg.id}')">Anular</button>
+                     </div>`;
+              return `<tr style="${rowStyle}">
+                  <td class="mono" style="font-size:12px;">${pg.fecha||'-'}</td>
+                  <td><b>${p?.nombre||'S/N'}</b></td>
+                  <td>${inq?.nombre||'-'}</td>
+                  <td class="mono" style="font-size:12px;">${periodo}</td>
+                  <td class="mono"><b>${simbolo} ${(pg.monto||0).toLocaleString('es-AR')}</b></td>
+                  <td><span class="badge badge-info" style="background:var(--bg2);">${moneda}</span></td>
+                  <td style="font-size:12px;">${pg.medio||'-'}</td>
+                  <td>${estadoBadge}</td>
+                  <td>${acciones}</td>
+              </tr>`;
+          }).join('') + "</tbody></table>";
+  };
+
+  window.limpiarFiltrosHistorial = () => {
+      ['hist-f-prop','hist-f-inq','hist-f-desde','hist-f-hasta','hist-f-estado','hist-f-moneda'].forEach(id => {
+          const el = document.getElementById(id);
+          if(el) el.value = '';
+      });
+      window.aplicarFiltrosHistorial();
+  };
+
+  window.exportarHistorialCSV = () => {
+      const fProp   = document.getElementById('hist-f-prop')?.value  || '';
+      const fInq    = document.getElementById('hist-f-inq')?.value   || '';
+      const fDesde  = document.getElementById('hist-f-desde')?.value || '';
+      const fHasta  = document.getElementById('hist-f-hasta')?.value || '';
+      const fEstado = document.getElementById('hist-f-estado')?.value || '';
+      const fMoneda = document.getElementById('hist-f-moneda')?.value || '';
+
+      let historial = [...(db.pagos||[])].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+      historial = historial.filter(pg => {
+          const c = (db.contratos||[]).find(x=>x.id===pg.cId);
+          const p = c?(db.propiedades||[]).find(x=>x.id===c.pId):null;
+          const inq = c?(db.personas||[]).find(x=>x.id===c.inqId):null;
+          if(fProp && p?.id !== fProp) return false;
+          if(fInq && inq?.id !== fInq) return false;
+          const mesPg = pg.periodo||pg.periodoDesde||'';
+          if(fDesde && mesPg && mesPg < fDesde) return false;
+          if(fHasta && mesPg && mesPg > fHasta) return false;
+          if(fEstado==='vigente' && pg.anulado) return false;
+          if(fEstado==='anulado' && !pg.anulado) return false;
+          if(fMoneda && (c?.moneda||'ARS') !== fMoneda) return false;
+          return true;
+      });
+
+      const encabezado = ['Fecha Cobro','Inmueble','Dirección','Inquilino','Período','Monto','Moneda','Medio de Pago','Estado','Motivo Anulación'];
+      const filas = historial.map(pg => {
+          const c = (db.contratos||[]).find(x=>x.id===pg.cId);
+          const p = c?(db.propiedades||[]).find(x=>x.id===c.pId):null;
+          const inq = c?(db.personas||[]).find(x=>x.id===c.inqId):null;
+          const periodo = pg.periodoDesde&&pg.periodoHasta&&pg.periodoDesde!==pg.periodoHasta
+              ?pg.periodoDesde+' → '+pg.periodoHasta:(pg.periodo||'-');
+          return [
+              pg.fecha||'-',
+              p?.nombre||'S/N',
+              p?.direccion||'-',
+              inq?.nombre||'-',
+              periodo,
+              pg.monto||0,
+              c?.moneda||'ARS',
+              pg.medio||'-',
+              pg.anulado?'ANULADO':'Válido',
+              pg.anuladoMotivo||''
+          ].map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',');
+      });
+
+      const csv = [encabezado.join(','), ...filas].join('\n');
+      const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'PropManager_Historial_' + new Date().toISOString().split('T')[0] + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('✅ CSV exportado correctamente.');
+  };
+
+  // ══════════════════════════════════════════════════════
+  // IMPORTADOR CON IA — LECTURA DE EMAIL Y DOCUMENTOS
+  // ══════════════════════════════════════════════════════
+
+  const IA_KEY_STORAGE = 'propmanager_anthropic_key';
+  let iaDataExtraida = null;  // datos que la IA extrajo, para precargar el form
+  let iaChatHistory = [];     // historial de la conversación con la IA
+
+  window.guardarAPIKey = () => {
+      const key = document.getElementById('ia-api-key').value.trim();
+      if(!key.startsWith('AIza') && key.length < 20) { showToast('La key no parece válida. Debe empezar con AIza...'); return; }
+      localStorage.setItem(IA_KEY_STORAGE, key);
+      document.getElementById('ia-key-status').textContent = '✅ Key guardada';
+      showToast('✅ API Key guardada en este navegador');
+  };
+
+  function cargarAPIKey() {
+      const key = localStorage.getItem(IA_KEY_STORAGE) || '';
+      const el = document.getElementById('ia-api-key');
+      if(el && key) { el.value = key; document.getElementById('ia-key-status').textContent = '✅ Key cargada'; }
+      return key;
+  }
+
+  // Leer archivo .docx como texto plano (extrae texto del XML interno)
+  async function leerDocx(file) {
+      return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+              try {
+                  // Los .docx son ZIPs — extraemos el XML de word/document.xml
+                  const bytes = new Uint8Array(e.target.result);
+                  // Buscar el contenido XML dentro del ZIP buscando patrones de texto
+                  let text = '';
+                  // Convertir a string y extraer texto entre tags <w:t>
+                  const raw = new TextDecoder('utf-8', {fatal:false}).decode(bytes);
+                  const matches = raw.match(/<w:t[^>]*>([^<]+)<\/w:t>/g) || [];
+                  text = matches.map(m => m.replace(/<[^>]+>/g, '')).join(' ');
+                  if(!text.trim()) {
+                      // Fallback: leer como texto plano (para .txt)
+                      text = raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 8000);
+                  }
+                  resolve(text.substring(0, 8000));
+              } catch(err) { resolve(''); }
+          };
+          reader.readAsArrayBuffer(file);
+      });
+  }
+
+  window.analizarConIA = async () => {
+      const apiKey = cargarAPIKey();
+      if(!apiKey) { showToast('⚠️ Primero cargá tu Anthropic API Key arriba.'); return; }
+
+      const emailTexto = (document.getElementById('ia-email-texto')?.value || '').trim();
+      const fileContrato = document.getElementById('ia-file-contrato')?.files[0];
+      const fileMutuo = document.getElementById('ia-file-mutuo')?.files[0];
+
+      if(!emailTexto && !fileContrato && !fileMutuo) {
+          showToast('⚠️ Pegá el texto del email o subí al menos un documento.');
+          return;
+      }
+
+      const resultEl = document.getElementById('ia-resultado');
+      resultEl.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--ink3);">🤖 Analizando... un momento...</div>';
+      document.getElementById('ia-preguntas').style.display = 'none';
+      document.getElementById('ia-acciones').style.display = 'none';
+      document.getElementById('ia-chat-wrap').style.display = 'none';
+
+      // Armar el contenido para la IA
+      let contenidoTotal = '';
+      if(emailTexto) contenidoTotal += '=== EMAIL / PROPUESTA ===\n' + emailTexto + '\n\n';
+      if(fileContrato) { const txt = await leerDocx(fileContrato); if(txt) contenidoTotal += '=== CONTRATO DE LOCACIÓN ===\n' + txt + '\n\n'; }
+      if(fileMutuo)    { const txt = await leerDocx(fileMutuo);    if(txt) contenidoTotal += '=== CONTRATO DE MUTUO ===\n' + txt + '\n\n'; }
+
+      // Armar la lista de inmuebles y personas existentes para que la IA los pueda matchear
+      const propsList = (db.propiedades||[]).filter(p=>!p.eliminado).map(p => `ID:${p.id} → ${p.nombre} (${p.direccion||''})`).join('; ');
+      const personasList = (db.personas||[]).filter(p=>!p.archivado).map(p => `ID:${p.id} → ${p.nombre} (DNI:${p.dni||'-'})`).join('; ');
+
+      const systemPrompt = `Sos un asistente experto en contratos de alquiler argentinos. 
+Tu tarea es extraer datos de contratos de locación y mutuos para cargarlos en un sistema de gestión.
+
+INMUEBLES EXISTENTES EN EL SISTEMA: ${propsList || 'ninguno aún'}
+PERSONAS EXISTENTES EN EL SISTEMA: ${personasList || 'ninguna aún'}
+
+Analizá el texto y respondé ÚNICAMENTE con un JSON con esta estructura exacta:
+{
+  "pId": "ID del inmueble si matchea con uno existente, sino null",
+  "pNombre": "nombre del inmueble/local según el texto",
+  "inqId": "ID del inquilino si matchea, sino null",
+  "inqNombre": "nombre completo del inquilino",
+  "inqDni": "DNI o CUIT del inquilino",
+  "garNombre": "nombre del garante si lo hay",
+  "garDni": "DNI del garante",
+  "canon": número en pesos sin puntos ni comas,
+  "mutuo": número en pesos del mutuo/depósito si lo hay o 0,
+  "moneda": "ARS" o "USD",
+  "inicio": "YYYY-MM-DD fecha inicio contrato",
+  "venc": "YYYY-MM-DD fecha vencimiento contrato",
+  "act": "YYYY-MM-DD fecha primera actualización de canon",
+  "periodo": "3" o "4" o "6" o "12" según periodicidad de ajuste en meses,
+  "dia": número día de pago del mes,
+  "sellado": número importe sellado o 0,
+  "selladoVenc": "YYYY-MM-DD fecha límite sellado o null",
+  "iva": "0" o "21",
+  "preguntas": ["lista de datos que no pudiste encontrar o que son ambiguos"],
+  "resumen": "resumen en 2-3 líneas de lo que encontraste"
+}
+Respondé SOLO el JSON, sin texto adicional, sin backticks.`;
+
+      iaChatHistory = [{ role: 'user', content: contenidoTotal }];
+
+      try {
+          const geminiMessages = [
+              { role: 'user', parts: [{ text: systemPrompt + '\n\n' + contenidoTotal }] }
+          ];
+
+          const response = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+              {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      contents: geminiMessages,
+                      generationConfig: { maxOutputTokens: 1500, temperature: 0.1 }
+                  })
+              }
+          );
+
+          if(!response.ok) {
+              const err = await response.json();
+              throw new Error(err.error?.message || 'Error de API Gemini: ' + response.status);
+          }
+
+          const data = await response.json();
+          const texto = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          iaChatHistory.push({ role: 'assistant', content: texto }); // se convierte a 'model' al enviar a Gemini
+
+          // Parsear JSON
+          let parsed;
+          try {
+              const clean = texto.replace(/```json|```/g, '').trim();
+              parsed = JSON.parse(clean);
+          } catch(e) {
+              resultEl.innerHTML = '<div style="color:var(--red); padding:1rem;">❌ La IA no devolvió un formato válido. Intentá de nuevo o simplificá el texto.</div>';
+              return;
+          }
+
+          iaDataExtraida = parsed;
+
+          // Mostrar resumen
+          const moneda = parsed.moneda || 'ARS';
+          const simbolo = moneda === 'USD' ? 'U$S' : '$';
+          resultEl.innerHTML = `
+              <div style="line-height:2; font-size:13px;">
+                  <div>🏠 <b>Inmueble:</b> ${parsed.pNombre || '-'} ${parsed.pId ? '<span class="badge badge-success">✓ coincide con sistema</span>' : '<span class="badge badge-warning">⚠ no encontrado en sistema</span>'}</div>
+                  <div>👤 <b>Inquilino:</b> ${parsed.inqNombre || '-'} (DNI: ${parsed.inqDni || '-'}) ${parsed.inqId ? '<span class="badge badge-success">✓ en sistema</span>' : '<span class="badge badge-warning">⚠ no registrado</span>'}</div>
+                  ${parsed.garNombre ? `<div>🛡 <b>Garante:</b> ${parsed.garNombre} (DNI: ${parsed.garDni||'-'})</div>` : ''}
+                  <div>💰 <b>Canon:</b> ${simbolo} ${(parsed.canon||0).toLocaleString('es-AR')} ${parsed.mutuo ? `+ ${simbolo} ${parsed.mutuo.toLocaleString('es-AR')} mutuo` : ''}</div>
+                  <div>📅 <b>Inicio:</b> ${parsed.inicio || '-'} &nbsp;&nbsp; <b>Vence:</b> ${parsed.venc || '-'}</div>
+                  <div>📈 <b>Ajuste:</b> cada ${parsed.periodo || '-'} meses, primer ajuste: ${parsed.act || '-'}</div>
+                  <div>📆 <b>Día de pago:</b> día ${parsed.dia || '-'} de cada mes</div>
+                  ${parsed.sellado ? `<div>📋 <b>Sellado:</b> ${simbolo} ${parsed.sellado.toLocaleString('es-AR')} (vto: ${parsed.selladoVenc||'-'})</div>` : ''}
+              </div>
+              ${parsed.resumen ? `<div style="margin-top:10px; padding:10px; background:var(--bg2); border-radius:6px; font-size:12px; color:var(--ink3);"><b>Resumen IA:</b> ${parsed.resumen}</div>` : ''}
+          `;
+
+          // Mostrar preguntas si las hay
+          if(parsed.preguntas?.length) {
+              document.getElementById('ia-preguntas').style.display = 'block';
+              document.getElementById('ia-preguntas-lista').innerHTML = parsed.preguntas.map((q,i) => `<div style="margin-bottom:4px;">${i+1}. ${q}</div>`).join('');
+              document.getElementById('ia-chat-wrap').style.display = 'block';
+          }
+
+          document.getElementById('ia-acciones').style.display = 'flex';
+
+      } catch(err) {
+          resultEl.innerHTML = `<div style="color:var(--red); padding:1rem;">❌ Error: ${err.message}</div>`;
+      }
+  };
+
+  window.responderIA = async () => {
+      const apiKey = cargarAPIKey();
+      const input = document.getElementById('ia-chat-input');
+      const respuesta = input?.value?.trim();
+      if(!respuesta || !apiKey) return;
+
+      const histEl = document.getElementById('ia-chat-historial');
+      histEl.innerHTML += `<div style="margin-bottom:8px;"><b>Vos:</b> ${respuesta}</div>`;
+      input.value = '';
+
+      iaChatHistory.push({ role: 'user', content: 'Aclaración: ' + respuesta + '\n\nActualizá el JSON con esta información y devolvé solo el JSON actualizado.' });
+
+      try {
+          // Armar historial en formato Gemini
+          const geminiChat = iaChatHistory.map(m => ({
+              role: m.role === 'assistant' ? 'model' : 'user',
+              parts: [{ text: m.content }]
+          }));
+
+          const response = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+              {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      contents: geminiChat,
+                      generationConfig: { maxOutputTokens: 1500, temperature: 0.1 }
+                  })
+              }
+          );
+          const data = await response.json();
+          const texto = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          iaChatHistory.push({ role: 'assistant', content: texto });
+
+          try {
+              const clean = texto.replace(/```json|```/g, '').trim();
+              const parsed = JSON.parse(clean);
+              iaDataExtraida = parsed;
+              histEl.innerHTML += `<div style="margin-bottom:8px; color:var(--green);">✅ Datos actualizados. Podés precargar el formulario.</div>`;
+              if(!parsed.preguntas?.length) {
+                  document.getElementById('ia-preguntas').style.display = 'none';
+              } else {
+                  document.getElementById('ia-preguntas-lista').innerHTML = parsed.preguntas.map((q,i)=>`<div>${i+1}. ${q}</div>`).join('');
+              }
+          } catch(e) {
+              histEl.innerHTML += `<div style="margin-bottom:8px; color:var(--ink3);">IA: ${texto}</div>`;
+          }
+          histEl.scrollTop = histEl.scrollHeight;
+      } catch(err) { showToast('Error al comunicarse con la IA.'); }
+  };
+
+  window.precargarFormulario = () => {
+      if(!iaDataExtraida) { showToast('Primero analizá un documento.'); return; }
+      const d = iaDataExtraida;
+
+      // Si el inquilino no está en el sistema, ofrecemos crearlo
+      if(!d.inqId && d.inqNombre) {
+          if(confirm(`El inquilino "${d.inqNombre}" no está en el sistema.\n¿Querés crearlo ahora antes de precargar el contrato?`)) {
+              // Abrir modal persona pre-cargado
+              window.openModal('modal-persona');
+              setTimeout(() => {
+                  const el = (id) => document.getElementById(id);
+                  if(el('p-nombre')) el('p-nombre').value = d.inqNombre;
+                  if(el('p-dni'))    el('p-dni').value    = d.inqDni || '';
+                  if(el('p-rol'))    el('p-rol').value    = 'Inquilino';
+                  showToast('Completá los datos del inquilino y guardá. Luego volvé a precargar.');
+              }, 200);
+              return;
+          }
+      }
+
+      // Abrir modal contrato con datos precargados
+      window.openContratoModal();
+      setTimeout(() => {
+          const el = (id) => document.getElementById(id);
+          if(d.pId    && el('c-p-id'))   el('c-p-id').value   = d.pId;
+          if(d.inqId  && el('c-inq'))    el('c-inq').value    = d.inqId;
+          if(d.canon  && el('c-canon'))  el('c-canon').value  = d.canon;
+          if(d.mutuo  && el('c-mutuo'))  el('c-mutuo').value  = d.mutuo || 0;
+          if(d.moneda && el('c-moneda')) el('c-moneda').value = d.moneda;
+          if(d.venc   && el('c-venc'))   el('c-venc').value   = d.venc;
+          if(d.act    && el('c-act'))    el('c-act').value    = d.act;
+          if(d.periodo && el('c-periodo')) el('c-periodo').value = d.periodo;
+          if(d.dia    && el('c-dia'))    el('c-dia').value    = d.dia;
+          if(d.sellado && el('c-sellado')) el('c-sellado').value = d.sellado;
+          if(d.selladoVenc && el('c-sellado-venc')) el('c-sellado-venc').value = d.selladoVenc;
+          if(d.iva    && el('c-iva'))    el('c-iva').value    = d.iva;
+          showToast('✅ Formulario precargado. Revisá y completá lo que falte.');
+      }, 300);
+  };
+
+  window.limpiarIA = () => {
+      document.getElementById('ia-email-texto').value = '';
+      document.getElementById('ia-file-contrato').value = '';
+      document.getElementById('ia-file-mutuo').value = '';
+      document.getElementById('ia-resultado').innerHTML = 'Los datos extraídos aparecerán acá...';
+      document.getElementById('ia-resultado').style.color = 'var(--ink3)';
+      document.getElementById('ia-preguntas').style.display = 'none';
+      document.getElementById('ia-acciones').style.display = 'none';
+      document.getElementById('ia-chat-wrap').style.display = 'none';
+      document.getElementById('ia-chat-historial').innerHTML = '';
+      iaDataExtraida = null;
+      iaChatHistory = [];
   };
 
   window.exportarBackup = () => { 
@@ -1553,6 +2386,183 @@
   };
 
   window.cerrarSesion = () => auth.signOut();
+
+  // ══════════════════════════════════════════════
+  // SISTEMA DE ALERTAS POR EMAIL (EmailJS)
+  // ══════════════════════════════════════════════
+
+  const CFG_KEY = 'propmanager_email_config';
+
+  function cargarConfigEmail() {
+      try {
+          const raw = localStorage.getItem(CFG_KEY);
+          return raw ? JSON.parse(raw) : {};
+      } catch(e) { return {}; }
+  }
+
+  function poblarConfigEmail() {
+      const cfg = cargarConfigEmail();
+      const set = (id, val) => { const el = document.getElementById(id); if(el) { if(el.type==='checkbox') el.checked=!!val; else el.value=val||''; } };
+      set('cfg-ejs-service', cfg.serviceId);
+      set('cfg-ejs-template', cfg.templateId);
+      set('cfg-ejs-key', cfg.publicKey);
+      set('cfg-email-destino', cfg.emailDestino);
+      set('cfg-alerta-cobros', cfg.alertaCobros !== false);
+      set('cfg-alerta-venc', cfg.alertaVenc !== false);
+      set('cfg-alerta-canon', cfg.alertaCanon !== false);
+  }
+
+  window.guardarConfigEmail = () => {
+      const get = (id) => { const el = document.getElementById(id); return el ? (el.type==='checkbox' ? el.checked : el.value.trim()) : ''; };
+      const cfg = {
+          serviceId: get('cfg-ejs-service'),
+          templateId: get('cfg-ejs-template'),
+          publicKey: get('cfg-ejs-key'),
+          emailDestino: get('cfg-email-destino'),
+          alertaCobros: get('cfg-alerta-cobros'),
+          alertaVenc: get('cfg-alerta-venc'),
+          alertaCanon: get('cfg-alerta-canon'),
+          ultimaVerificacion: null
+      };
+      if(!cfg.serviceId || !cfg.templateId || !cfg.publicKey || !cfg.emailDestino) {
+          showToast("⚠️ Completá todos los campos de EmailJS para activar las alertas.");
+          return;
+      }
+      localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+      showToast("✅ Configuración de email guardada.");
+      document.getElementById('cfg-status').textContent = 'Configuración guardada correctamente. Las alertas se verifican automáticamente al ingresar.';
+  };
+
+  async function enviarEmailAlerta(asunto, cuerpo) {
+      const cfg = cargarConfigEmail();
+      if(!cfg.serviceId || !cfg.templateId || !cfg.publicKey || !cfg.emailDestino) return false;
+      try {
+          await emailjs.init(cfg.publicKey);
+          await emailjs.send(cfg.serviceId, cfg.templateId, {
+              to_email: cfg.emailDestino,
+              subject: asunto,
+              message: cuerpo,
+              app_name: 'PropManager',
+              fecha: new Date().toLocaleDateString('es-AR')
+          });
+          return true;
+      } catch(e) {
+          console.error('EmailJS error:', e);
+          return false;
+      }
+  }
+
+  window.testEmail = async () => {
+      const cfg = cargarConfigEmail();
+      if(!cfg.serviceId || !cfg.templateId || !cfg.publicKey || !cfg.emailDestino) {
+          showToast("⚠️ Primero guardá la configuración de EmailJS.");
+          return;
+      }
+      document.getElementById('cfg-status').textContent = '📨 Enviando email de prueba...';
+      const ok = await enviarEmailAlerta('PropManager — Email de prueba', 
+          'Este es un email de prueba de PropManager.\n\nSi recibís este mensaje, las alertas por email están funcionando correctamente.');
+      if(ok) {
+          document.getElementById('cfg-status').textContent = '✅ Email de prueba enviado a ' + cfg.emailDestino;
+          showToast("✅ Email de prueba enviado.");
+      } else {
+          document.getElementById('cfg-status').textContent = '❌ Error al enviar. Verificá tu Service ID, Template ID y Public Key en EmailJS.';
+          showToast("❌ Error al enviar. Revisá la configuración.");
+      }
+  };
+
+  window.verificarYEnviarAlertas = async () => {
+      const cfg = cargarConfigEmail();
+      if(!cfg.serviceId || !cfg.emailDestino) {
+          showToast("⚠️ Configurá el email primero en ⚙️ Configuración.");
+          return;
+      }
+      const hoy = new Date();
+      const hoyStr = hoy.toISOString().split('T')[0];
+      const alertasEmail = [];
+
+      // 1. Contratos por vencer (60 y 30 días)
+      if(cfg.alertaVenc !== false) {
+          (db.contratos || []).filter(c => !c.finalizado && c.venc).forEach(c => {
+              const prop = (db.propiedades||[]).find(x => x.id === c.pId);
+              const inq = (db.personas||[]).find(x => x.id === c.inqId);
+              const dias = Math.ceil((new Date(c.venc) - hoy) / 86400000);
+              if(dias === 60 || dias === 30 || dias === 15 || dias === 7) {
+                  alertasEmail.push(`📅 VENCIMIENTO DE CONTRATO en ${dias} días\nInmueble: ${prop?.nombre||'S/N'}\nInquilino: ${inq?.nombre||'-'}\nFecha de vencimiento: ${c.venc}`);
+              } else if(dias < 0 && dias > -5) {
+                  alertasEmail.push(`❌ CONTRATO VENCIDO hace ${Math.abs(dias)} días\nInmueble: ${prop?.nombre||'S/N'}\nInquilino: ${inq?.nombre||'-'}`);
+              }
+          });
+      }
+
+      // 2. Actualizaciones de canon próximas (15 días)
+      if(cfg.alertaCanon !== false) {
+          (db.contratos || []).filter(c => !c.finalizado && c.act).forEach(c => {
+              const prop = (db.propiedades||[]).find(x => x.id === c.pId);
+              const dias = Math.ceil((new Date(c.act) - hoy) / 86400000);
+              if(dias >= 0 && dias <= 15) {
+                  alertasEmail.push(`📈 ACTUALIZACIÓN DE CANON en ${dias} días\nInmueble: ${prop?.nombre||'S/N'}\nCanon actual: $${((Number(c.canon)||0)+(Number(c.mutuo)||0)).toLocaleString('es-AR')}\nFecha de ajuste: ${c.act}`);
+              } else if(dias < 0 && dias > -5) {
+                  alertasEmail.push(`⚠️ ACTUALIZACIÓN DE CANON VENCIDA hace ${Math.abs(dias)} días\nInmueble: ${prop?.nombre||'S/N'}`);
+              }
+          });
+      }
+
+      // 3. Cobros próximos (5 días antes del día de cobro de cada contrato)
+      if(cfg.alertaCobros !== false) {
+          const mesActual = hoyStr.substring(0,7);
+          (db.contratos || []).filter(c => !c.finalizado && c.dia).forEach(c => {
+              const prop = (db.propiedades||[]).find(x => x.id === c.pId);
+              const inq = (db.personas||[]).find(x => x.id === c.inqId);
+              const diaCobro = Number(c.dia) || 1;
+              const diasHastaCobro = diaCobro - hoy.getDate();
+              // Avisar 5 días antes y el día del cobro
+              if(diasHastaCobro >= 0 && diasHastaCobro <= 5) {
+                  const yaCobrado = (db.pagos||[]).find(pg => pg.cId === c.id && pg.periodo === mesActual && !pg.anulado);
+                  if(!yaCobrado) {
+                      const canon = (Number(c.canon)||0) + (Number(c.mutuo)||0);
+                      alertasEmail.push(`💰 COBRO PRÓXIMO ${diasHastaCobro === 0 ? '(HOY)' : 'en ' + diasHastaCobro + ' días'}\nInmueble: ${prop?.nombre||'S/N'}\nInquilino: ${inq?.nombre||'-'}\nImporte: $${canon.toLocaleString('es-AR')}\nDía de cobro: ${diaCobro}`);
+                  }
+              }
+          });
+      }
+
+      if(!alertasEmail.length) {
+          showToast("✅ Sin alertas para enviar hoy.");
+          if(document.getElementById('cfg-status')) document.getElementById('cfg-status').textContent = '✅ Verificación realizada — sin alertas pendientes para hoy (' + hoyStr + ').';
+          return;
+      }
+
+      showLoading(true);
+      const cuerpoEmail = alertasEmail.join('\n\n─────────────────────\n\n');
+      const ok = await enviarEmailAlerta(
+          `PropManager — ${alertasEmail.length} alerta(s) pendiente(s)`,
+          `Resumen de alertas al ${new Date().toLocaleDateString('es-AR')}:\n\n` + cuerpoEmail
+      );
+      showLoading(false);
+
+      if(ok) {
+          showToast(`✅ Email enviado con ${alertasEmail.length} alerta(s).`);
+          if(document.getElementById('cfg-status')) document.getElementById('cfg-status').textContent = `✅ Último envío: ${new Date().toLocaleString('es-AR')} — ${alertasEmail.length} alerta(s) enviadas.`;
+          // Guardar fecha de última verificación
+          const cfg2 = cargarConfigEmail();
+          cfg2.ultimaVerificacion = new Date().toISOString();
+          localStorage.setItem(CFG_KEY, JSON.stringify(cfg2));
+      } else {
+          showToast("❌ Error al enviar el email de alertas.");
+      }
+  };
+
+  // Verificar alertas automáticamente al cargar (una vez por día)
+  function verificarAlertasAuto() {
+      const cfg = cargarConfigEmail();
+      if(!cfg.serviceId || !cfg.emailDestino) return;
+      const ultima = cfg.ultimaVerificacion ? new Date(cfg.ultimaVerificacion) : null;
+      const hoy = new Date();
+      // Solo si no se verificó hoy
+      if(!ultima || ultima.toDateString() !== hoy.toDateString()) {
+          setTimeout(() => window.verificarYEnviarAlertas(), 3000); // 3 segundos después de cargar
+      }
+  }
   
   function updateAlerts() {
       const hoy = new Date().toISOString().split('T')[0];
