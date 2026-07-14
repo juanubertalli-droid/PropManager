@@ -639,12 +639,19 @@
                 <div class="form-group form-full"><label class="form-label">Co-Garante Secundario (Opcional)</label><select id="c-cogar" class="form-select"></select></div>
                 
                 <div class="form-section-title">Valores y Vencimientos</div>
-                <div class="form-group"><label class="form-label">Canon Alquiler Pactado ($)</label><input type="number" id="c-canon" class="form-input"></div>
+                <div class="form-group"><label class="form-label">Canon Alquiler Pactado ($)</label><input type="number" id="c-canon" class="form-input" oninput="window.calcularTotalContrato()"></div>
                 <div class="form-group"><label class="form-label">Canon Complementario / Mutuo ($)</label><input type="number" id="c-mutuo" class="form-input" value="0"></div>
                 <div class="form-group"><label class="form-label">Importe Sellado de Ley ($)</label><input type="number" id="c-sellado" class="form-input" value="0"></div>
                 <div class="form-group"><label class="form-label">Fecha Límite Pago Sellado</label><input type="date" id="c-sellado-venc" class="form-input"></div>
                 
-                <div class="form-group"><label class="form-label">Alícuota IVA</label><select id="c-iva" class="form-select"><option value="0">Exento / No Gravado</option><option value="21">21%</option><option value="10.5">10.5%</option></select></div>
+                <div class="form-section-title">IVA sobre contrato</div>
+                <div class="form-group"><label class="form-label">Base de cálculo IVA ($)</label><input type="number" id="c-iva-base" class="form-input" placeholder="Ej: 50000 (valor en contrato)" value="0" oninput="window.calcularTotalContrato()"></div>
+                <div class="form-group"><label class="form-label">Alícuota IVA</label><select id="c-iva" class="form-select" onchange="window.calcularTotalContrato()"><option value="0">Exento / No Gravado</option><option value="21">21%</option><option value="10.5">10.5%</option></select></div>
+                <div class="form-group"><label class="form-label">IVA mensual fijo ($) <small style="color:var(--ink3);">(se calcula solo)</small></label><input type="number" id="c-iva-monto" class="form-input" placeholder="Se calcula automático" readonly style="background:var(--bg2);"></div>
+                <div class="form-group"><label class="form-label">Periodicidad del IVA</label><select id="c-iva-periodo" class="form-select" onchange="window.calcularTotalContrato()"><option value="mensual">Mensual</option><option value="trimestral">Trimestral</option><option value="semestral">Semestral</option><option value="anual">Anual</option></select></div>
+                <div class="form-group form-full" style="font-size:12px; color:var(--ink3); padding:8px; background:var(--bg2); border-radius:8px;">
+                    💡 <b>Total mensual estimado:</b> <span id="c-total-estimado" style="font-weight:700; color:var(--ink);">$0</span> &nbsp;(canon + IVA mensual)
+                </div>
                 <div class="form-group"><label class="form-label">Moneda de Pago</label><select id="c-moneda" class="form-select"><option>ARS</option><option>USD</option></select></div>
                 <div class="form-group"><label class="form-label">Periodicidad de Ajuste</label><select id="c-periodo" class="form-select"><option value="3">Trimestral</option><option value="4">Cuatrimestral</option><option value="6">Semestral</option><option value="12">Anual</option></select></div>
                 <div class="form-group"><label class="form-label">Día de Cobro Pactado</label><input type="number" id="c-dia" class="form-input" value="10"></div>
@@ -1181,7 +1188,10 @@
               sellado: Number(document.getElementById('c-sellado').value), 
               selladoVenc: document.getElementById('c-sellado-venc').value, 
               selladoPagado: false, 
-              iva: document.getElementById('c-iva').value, 
+              iva: document.getElementById('c-iva').value,
+              ivaBase: Number(document.getElementById('c-iva-base')?.value) || 0,
+              ivaMonto: Math.round((Number(document.getElementById('c-iva-base')?.value)||0) * (Number(document.getElementById('c-iva')?.value)||0) / 100),
+              ivaPeriodo: document.getElementById('c-iva-periodo')?.value || 'mensual',
               periodo: document.getElementById('c-periodo').value, 
               dia: Number(document.getElementById('c-dia').value), 
               inicio: document.getElementById('c-inicio').value,
@@ -1436,6 +1446,10 @@
       document.getElementById('c-sellado').value = 0;
       document.getElementById('c-dia').value = 10;
       document.getElementById('c-iva').value = '0';
+      if(document.getElementById('c-iva-base')) document.getElementById('c-iva-base').value = 0;
+      if(document.getElementById('c-iva-monto')) document.getElementById('c-iva-monto').value = '';
+      if(document.getElementById('c-iva-periodo')) document.getElementById('c-iva-periodo').value = 'mensual';
+      if(document.getElementById('c-total-estimado')) document.getElementById('c-total-estimado').textContent = '$0';
       document.getElementById('c-moneda').value = 'ARS';
       document.getElementById('c-periodo').value = '3';
       document.querySelector('#modal-contrato .modal-title').textContent = 'Nuevo Vínculo Contractual';
@@ -1457,6 +1471,10 @@
       document.getElementById('c-sellado').value = c.sellado || 0;
       document.getElementById('c-sellado-venc').value = c.selladoVenc || '';
       document.getElementById('c-iva').value = c.iva || '0';
+      if(document.getElementById('c-iva-base')) document.getElementById('c-iva-base').value = c.ivaBase || 0;
+      if(document.getElementById('c-iva-monto')) document.getElementById('c-iva-monto').value = c.ivaMonto || 0;
+      if(document.getElementById('c-iva-periodo')) document.getElementById('c-iva-periodo').value = c.ivaPeriodo || 'mensual';
+      window.calcularTotalContrato();
       document.getElementById('c-moneda').value = c.moneda || 'ARS';
       document.getElementById('c-periodo').value = c.periodo || '3';
       document.getElementById('c-dia').value = c.dia || 10;
@@ -1595,35 +1613,17 @@
       const propsList    = (db.propiedades||[]).filter(p=>!p.eliminado).map(p=>`ID:${p.id} → ${p.nombre} (${p.direccion||''})`).join('; ');
       const personasList = (db.personas||[]).filter(p=>!p.archivado).map(p=>`ID:${p.id} → ${p.nombre} (DNI:${p.dni||'-'})`).join('; ');
 
-      const prompt = `Sos un asistente experto en contratos de alquiler argentinos.
-Extraé los datos del siguiente texto para cargarlos en un sistema de gestión.
+      const prompt = `Sos un asistente experto en contratos de alquiler argentinos. Tu única tarea es extraer datos y devolver un JSON.
 
 INMUEBLES EN EL SISTEMA: ${propsList||'ninguno'}
 PERSONAS EN EL SISTEMA: ${personasList||'ninguna'}
 
-Respondé ÚNICAMENTE con un JSON con esta estructura (sin backticks, sin texto extra):
-{
-  "pId": "ID si matchea con inmueble existente o null",
-  "pNombre": "nombre del inmueble",
-  "inqId": "ID si matchea con persona existente o null",
-  "inqNombre": "nombre completo del inquilino",
-  "inqDni": "DNI o CUIT",
-  "garNombre": "nombre del garante o null",
-  "garDni": "DNI del garante o null",
-  "canon": numero sin puntos ni comas,
-  "mutuo": numero o 0,
-  "moneda": "ARS" o "USD",
-  "inicio": "YYYY-MM-DD",
-  "venc": "YYYY-MM-DD",
-  "act": "YYYY-MM-DD primera actualización",
-  "periodo": "3" o "4" o "6" o "12",
-  "dia": numero dia de pago,
-  "sellado": numero o 0,
-  "selladoVenc": "YYYY-MM-DD o null",
-  "iva": "0" o "21",
-  "preguntas": ["datos que no encontraste o son ambiguos"],
-  "resumen": "2-3 líneas de lo que encontraste"
-}
+INSTRUCCIÓN CRÍTICA: Respondé SOLO con el objeto JSON, sin ningún texto antes ni después, sin explicaciones, sin markdown, sin backticks, sin la palabra "json". Solo el objeto JSON puro empezando con { y terminando con }.
+
+Estructura requerida:
+{"pId":null,"pNombre":"","inqId":null,"inqNombre":"","inqDni":"","garNombre":null,"garDni":null,"canon":0,"mutuo":0,"moneda":"ARS","inicio":"","venc":"","act":"","periodo":"3","dia":1,"sellado":0,"selladoVenc":null,"iva":"0","preguntas":[],"resumen":""}
+
+Completá cada campo con los datos del texto. Si no encontrás un dato dejá el valor por defecto de la estructura.
 
 TEXTO A ANALIZAR:
 ${contenidoTotal}`;
@@ -1632,9 +1632,9 @@ ${contenidoTotal}`;
 
       try {
           const res = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`,
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
               { method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ contents: iaChatHistory, generationConfig:{ maxOutputTokens:1500, temperature:0.1 } }) }
+                body: JSON.stringify({ contents: iaChatHistory, generationConfig:{ maxOutputTokens:1500, temperature:0.1, responseMimeType: "application/json" } }) }
           );
           if(!res.ok) { const err = await res.json(); throw new Error(err.error?.message || 'Error ' + res.status); }
           const data = await res.json();
@@ -1642,8 +1642,21 @@ ${contenidoTotal}`;
           iaChatHistory.push({ role:'model', parts:[{ text: texto }] });
 
           let parsed;
-          try { parsed = JSON.parse(texto.replace(/```json|```/g,'').trim()); }
-          catch(e) { resultEl.innerHTML = '<div style="color:var(--red);padding:1rem;">❌ Gemini no devolvió un JSON válido. Intentá de nuevo.</div>'; return; }
+          try {
+              // Intentar extraer JSON de la respuesta de múltiples formas
+              let jsonStr = texto.trim();
+              // Remover backticks y markdown
+              jsonStr = jsonStr.replace(/```json/gi,'').replace(/```/g,'').trim();
+              // Buscar el primer { y el último } para extraer solo el JSON
+              const start = jsonStr.indexOf('{');
+              const end = jsonStr.lastIndexOf('}');
+              if(start !== -1 && end !== -1) jsonStr = jsonStr.substring(start, end + 1);
+              parsed = JSON.parse(jsonStr);
+          } catch(e) {
+              console.error('Parse error:', e, 'Texto recibido:', texto);
+              resultEl.innerHTML = '<div style="color:var(--red);padding:1rem;">❌ Error al procesar la respuesta de Gemini.<br><small style=\"color:var(--ink3);\">Respuesta recibida: ' + texto.substring(0,200).replace(/</g,'&lt;') + '...</small><br><br><button class=\"btn btn-sm\" onclick=\"window.analizarConIA()\">🔄 Reintentar</button></div>';
+              return;
+          }
 
           iaDataExtraida = parsed;
           const sim = parsed.moneda==='USD' ? 'U$S' : '$';
@@ -1682,9 +1695,9 @@ ${contenidoTotal}`;
       iaChatHistory.push({ role:'user', parts:[{ text:'Aclaración: ' + resp + '\nActualizá el JSON y devolvé solo el JSON actualizado.' }] });
       try {
           const res = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`,
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
               { method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ contents: iaChatHistory, generationConfig:{ maxOutputTokens:1500, temperature:0.1 } }) }
+                body: JSON.stringify({ contents: iaChatHistory, generationConfig:{ maxOutputTokens:1500, temperature:0.1, responseMimeType: "application/json" } }) }
           );
           const data = await res.json();
           const texto = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -1729,6 +1742,10 @@ ${contenidoTotal}`;
           if(d.sellado && el('c-sellado'))       el('c-sellado').value      = d.sellado;
           if(d.selladoVenc && el('c-sellado-venc')) el('c-sellado-venc').value = d.selladoVenc;
           if(d.iva     && el('c-iva'))           el('c-iva').value          = d.iva;
+          if(d.ivaBase && el('c-iva-base'))      el('c-iva-base').value     = d.ivaBase || 0;
+          if(d.ivaMonto && el('c-iva-monto'))    el('c-iva-monto').value    = d.ivaMonto || 0;
+          if(d.ivaPeriodo && el('c-iva-periodo')) el('c-iva-periodo').value = d.ivaPeriodo || 'mensual';
+          window.calcularTotalContrato();
           showToast('✅ Formulario precargado. Revisá y completá lo que falte.');
       }, 300);
   };
@@ -1837,6 +1854,22 @@ ${contenidoTotal}`;
       }
   };
 
+  // Calcular total estimado en modal contrato
+  window.calcularTotalContrato = () => {
+      const canon    = Number(document.getElementById('c-canon')?.value) || 0;
+      const ivaBase  = Number(document.getElementById('c-iva-base')?.value) || 0;
+      const ivaAliq  = Number(document.getElementById('c-iva')?.value) || 0;
+      const ivaMonto = Math.round(ivaBase * ivaAliq / 100);
+      const ivaPer   = document.getElementById('c-iva-periodo')?.value || 'mensual';
+      // IVA mensual equivalente
+      const ivaFact  = { mensual:1, trimestral:1/3, semestral:1/6, anual:1/12 };
+      const ivaMensual = Math.round(ivaMonto * (ivaFact[ivaPer] || 1));
+      const total = canon + ivaMensual;
+      if(document.getElementById('c-iva-monto')) document.getElementById('c-iva-monto').value = ivaMonto;
+      if(document.getElementById('c-total-estimado')) 
+          document.getElementById('c-total-estimado').textContent = '$ ' + total.toLocaleString('es-AR') + (ivaPer !== 'mensual' ? ` (IVA ${ivaPer}: $${ivaMonto.toLocaleString('es-AR')})` : '');
+  };
+
   window.cerrarSesion = () => auth.signOut();
   
   function updateAlerts() {
@@ -1867,6 +1900,31 @@ ${contenidoTotal}`;
           if(c.selladoVenc && !c.selladoPagado) {
               if(c.selladoVenc <= hoy) alertas.push({prop: nombreProp, msg: "❗ FALTA PAGO DE SELLADO DE LEY (vencía: " + c.selladoVenc + ").", tipo: "danger"});
               else if(c.selladoVenc <= hoy15) alertas.push({prop: nombreProp, msg: "⚠️ Sellado de ley vence en menos de 15 días (fecha: " + c.selladoVenc + ").", tipo: "danger"});
+          }
+
+          // ── ALERTA ACTUALIZACIÓN DE IVA ──
+          // El IVA cambia al cumplirse cada año del contrato
+          if(c.ivaBase && c.iva && Number(c.iva) > 0 && c.inicio) {
+              const inicioContrato = new Date(c.inicio);
+              const hoyDate = new Date();
+              // Calcular próximo aniversario (cambio de año del contrato)
+              let proximoAniversario = new Date(inicioContrato);
+              while(proximoAniversario <= hoyDate) {
+                  proximoAniversario.setFullYear(proximoAniversario.getFullYear() + 1);
+              }
+              const proxAnivStr = proximoAniversario.toISOString().split('T')[0];
+              const diasAniv = Math.ceil((proximoAniversario - hoyDate) / 86400000);
+              const anioActual = Math.floor((hoyDate - inicioContrato) / (365.25 * 86400000)) + 1;
+
+              // Avisar 30 días antes del cambio de año
+              if(diasAniv <= 30) {
+                  const ivaActual = Math.round((Number(c.ivaBase)||0) * (Number(c.iva)||0) / 100);
+                  alertas.push({
+                      prop: nombreProp,
+                      msg: `🧾 Actualizar IVA en ${diasAniv} día${diasAniv!==1?'s':''} (${proxAnivStr}): al cumplirse el año ${anioActual} del contrato el valor base del IVA cambia. IVA actual: $${ivaActual.toLocaleString('es-AR')}/mes. Recordá actualizar el vínculo.`,
+                      tipo: diasAniv <= 15 ? "danger" : "info"
+                  });
+              }
           }
       });
       // Alertas de deuda por cobros pendientes
